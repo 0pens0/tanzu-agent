@@ -9,9 +9,12 @@ applications:
     env:
       JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 21.+ } }'
       GOOSE_ENABLED: true
-      # Provider configuration - set one of the following:
-      ANTHROPIC_API_KEY: ((ANTHROPIC_API_KEY))
-      # OPENAI_API_KEY: ((OPENAI_API_KEY))
+      # Provider configuration - set provider type and model
+      GOOSE_PROVIDER: openai
+      GOOSE_MODEL: gpt-4o
+      # API key for the configured provider:
+      # ANTHROPIC_API_KEY: ((ANTHROPIC_API_KEY))
+      OPENAI_API_KEY: ((OPENAI_API_KEY))
       # GOOGLE_API_KEY: ((GOOGLE_API_KEY))
       # DATABRICKS_HOST: ((DATABRICKS_HOST))
       # DATABRICKS_TOKEN: ((DATABRICKS_TOKEN))
