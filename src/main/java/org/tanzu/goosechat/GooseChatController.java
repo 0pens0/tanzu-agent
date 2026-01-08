@@ -174,11 +174,22 @@ public class GooseChatController {
                 GooseOptions.Builder optionsBuilder = GooseOptions.builder()
                     .timeout(Duration.ofMinutes(10));
                 
-                if (session.provider() != null) {
-                    optionsBuilder.addEnv("GOOSE_PROVIDER__TYPE", session.provider());
+                // Set provider - use session value if specified, otherwise fall back to env
+                String provider = session.provider();
+                if (provider == null || provider.isEmpty()) {
+                    provider = System.getenv("GOOSE_PROVIDER");
                 }
-                if (session.model() != null) {
-                    optionsBuilder.addEnv("GOOSE_PROVIDER__MODEL", session.model());
+                if (provider != null && !provider.isEmpty()) {
+                    optionsBuilder.provider(provider);
+                }
+                
+                // Set model - use session value if specified, otherwise fall back to env
+                String model = session.model();
+                if (model == null || model.isEmpty()) {
+                    model = System.getenv("GOOSE_MODEL");
+                }
+                if (model != null && !model.isEmpty()) {
+                    optionsBuilder.model(model);
                 }
 
                 GooseOptions options = optionsBuilder.build();

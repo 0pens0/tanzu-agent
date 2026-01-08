@@ -1,1 +1,29 @@
+# Secrets and credentials
 /vars.yaml
+
+# Maven build output
+/target/
+
+# Node.js / Angular artifacts
+src/main/frontend/node_modules/
+src/main/frontend/dist/
+src/main/frontend/.angular/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test output
+src/main/frontend/dist/test-out/
