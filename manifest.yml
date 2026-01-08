@@ -1,0 +1,18 @@
+---
+applications:
+  - name: goose-agent-chat
+    path: target/goose-agent-chat-1.0.0.jar
+    memory: 2G
+    buildpacks:
+      - https://github.com/cpage-pivotal/goose-buildpack
+      - java_buildpack_offline
+    env:
+      JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 21.+ } }'
+      GOOSE_ENABLED: true
+      # Provider configuration - set one of the following:
+      ANTHROPIC_API_KEY: ((ANTHROPIC_API_KEY))
+      # OPENAI_API_KEY: ((OPENAI_API_KEY))
+      # GOOGLE_API_KEY: ((GOOGLE_API_KEY))
+      # DATABRICKS_HOST: ((DATABRICKS_HOST))
+      # DATABRICKS_TOKEN: ((DATABRICKS_TOKEN))
+
