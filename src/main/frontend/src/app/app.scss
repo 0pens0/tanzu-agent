@@ -1,0 +1,80 @@
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.app-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--mat-sys-spacing-3, 12px);
+  flex-shrink: 0;
+  animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  .toolbar-icon {
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+    animation: rotateIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s backwards;
+  }
+  
+  .toolbar-title {
+    font: var(--mat-sys-title-large);
+    font-weight: 500;
+    animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s backwards;
+  }
+}
+
+.app-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s backwards;
+}
+
+// Material Design Animations
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rotateIn {
+  from {
+    opacity: 0;
+    transform: rotate(-180deg) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(0) scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+// Reduce motion for accessibility
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
