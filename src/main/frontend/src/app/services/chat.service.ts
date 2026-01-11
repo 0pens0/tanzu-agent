@@ -79,92 +79,82 @@ export class ChatService {
   }
 
   /**
-   * Send a message to the current session with SSE streaming
+   * Send a message to the current session with SSE streaming.
+   * 
+   * Uses the native browser EventSource API for better handling of proxy buffering
+   * and chunked encoding (especially important for Cloud Foundry's Go Router).
+   * 
+   * Uses token-level streaming from Goose CLI's --output-format stream-json.
+   * Each emitted value is a single token as it arrives from the LLM.
+   * 
+   * SSE Events handled:
+   * - `token`: Individual tokens (emitted to observer)
+   * - `complete`: Stream completion with token count
+   * - `status`: Processing status messages (logged)
+   * - `error`: Error events
    */
   sendMessage(message: string, sessionId: string): Observable<string> {
     return new Observable(observer => {
-      let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-      let buffer = '';
+      // Use GET endpoint with EventSource for better streaming support
+      // EventSource handles proxy buffering and chunked encoding better than fetch
+      const encodedMessage = encodeURIComponent(message);
+      const url = `${this.apiUrl}/sessions/${sessionId}/stream?message=${encodedMessage}`;
+      
+      console.log('[SSE] Connecting to:', url);
+      const eventSource = new EventSource(url);
+      
+      eventSource.onopen = () => {
+        console.log('[SSE] Connection opened');
+      };
 
-      fetch(`${this.apiUrl}/sessions/${sessionId}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message })
-      })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+      // Handle token events - individual tokens as they arrive
+      eventSource.addEventListener('token', (event: MessageEvent) => {
+        const data = event.data;
+        if (data && data.length > 0) {
+          // Log short tokens for debugging
+          if (data.length <= 20) {
+            console.debug(`[SSE token] "${data}"`);
+          }
+          observer.next(data);
         }
-        return response.body;
-      })
-      .then(body => {
-        if (!body) {
-          throw new Error('Response body is empty');
-        }
-        
-        reader = body.getReader();
-        const decoder = new TextDecoder();
-
-        const processStream = (): Promise<void> => {
-          return reader!.read().then(({ done, value }) => {
-            if (done) {
-              observer.complete();
-              return;
-            }
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            
-            // Keep the last incomplete line in the buffer
-            buffer = lines.pop() || '';
-            
-            let currentEvent = '';
-            for (const line of lines) {
-              if (line.startsWith('event:')) {
-                currentEvent = line.substring(6).trim();
-              } else if (line.startsWith('data:')) {
-                // Per SSE spec, remove "data:" and optional leading space
-                let data = line.substring(5);
-                if (data.startsWith(' ')) {
-                  data = data.substring(1);
-                }
-                
-                // Handle different event types
-                if (currentEvent === 'error') {
-                  observer.error(new Error(data));
-                  return;
-                } else if (currentEvent === 'heartbeat' || currentEvent === 'status') {
-                  // Ignore heartbeat and status events - they're just for keeping connection alive
-                  console.log(`[SSE ${currentEvent}]`, data);
-                  currentEvent = '';
-                  continue;
-                } else if (currentEvent === 'message' || currentEvent === '') {
-                  // Emit message data to the observer
-                  observer.next(data);
-                }
-                
-                currentEvent = '';
-              }
-            }
-
-            return processStream();
-          });
-        };
-
-        return processStream();
-      })
-      .catch(error => {
-        console.error('Stream error:', error);
-        observer.error(error);
       });
 
-      return () => {
-        // Cleanup on unsubscribe - cancel the stream reader
-        if (reader) {
-          reader.cancel().catch(err => console.error('Error canceling stream:', err));
+      // Handle status events
+      eventSource.addEventListener('status', (event: MessageEvent) => {
+        console.log('[SSE status]', event.data);
+      });
+
+      // Handle completion event
+      eventSource.addEventListener('complete', (event: MessageEvent) => {
+        console.log('[SSE complete] Total tokens:', event.data);
+        eventSource.close();
+        observer.complete();
+      });
+
+      // Handle error events from the server
+      eventSource.addEventListener('error', (event: MessageEvent) => {
+        console.error('[SSE error]', event.data);
+        eventSource.close();
+        observer.error(new Error(event.data || 'Stream error'));
+      });
+
+      // Handle connection errors
+      eventSource.onerror = (event: Event) => {
+        // Check if the connection was closed normally (after 'complete' event)
+        if (eventSource.readyState === EventSource.CLOSED) {
+          console.log('[SSE] Connection closed');
+          observer.complete();
+        } else {
+          console.error('[SSE] Connection error:', event);
+          eventSource.close();
+          observer.error(new Error('Connection to server failed'));
         }
+      };
+
+      // Cleanup on unsubscribe
+      return () => {
+        console.log('[SSE] Closing connection');
+        eventSource.close();
       };
     });
   }
