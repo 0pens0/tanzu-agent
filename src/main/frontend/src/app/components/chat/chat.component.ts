@@ -185,9 +185,10 @@ export class ChatComponent {
     };
     this.messages.update(msgs => [...msgs, assistantMessage]);
 
-    // Stream the response
+    // Stream the response with token-level updates
     this.chatService.sendMessage(prompt, currentSessionId).subscribe({
-      next: (chunk: string) => {
+      next: (token: string) => {
+        // Append token directly - no newline needed for token-level streaming
         this.messages.update(msgs => {
           const lastMsg = msgs[msgs.length - 1];
           if (lastMsg.role === 'assistant') {
@@ -195,7 +196,7 @@ export class ChatComponent {
               ...msgs.slice(0, -1),
               {
                 ...lastMsg,
-                content: lastMsg.content + chunk + '\n'
+                content: lastMsg.content + token
               }
             ];
           }

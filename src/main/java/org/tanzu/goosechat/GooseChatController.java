@@ -1,5 +1,8 @@
 package org.tanzu.goosechat;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletResponse;
 import org.tanzu.goose.cf.GooseExecutor;
 import org.tanzu.goose.cf.GooseExecutionException;
 import org.tanzu.goose.cf.GooseOptions;
@@ -17,6 +20,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
+import java.util.stream.Stream;
 
 /**
  * REST controller for managing conversational chat sessions with Goose CLI.
@@ -51,6 +55,7 @@ public class GooseChatController {
     private static final String SESSION_PREFIX = "chat-";
     
     private final GooseExecutor executor;
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private final ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
     
     // Session metadata tracking (Goose handles actual session persistence)
@@ -127,21 +132,69 @@ public class GooseChatController {
     }
 
     /**
-     * Send a message to an existing session and stream the response via SSE.
+     * Send a message to an existing session and stream the response via SSE (POST version).
+     * <p>
+     * Uses Goose CLI's {@code --output-format stream-json} for true token-level streaming.
+     * Each token is emitted as an SSE event as it arrives from the LLM.
+     * </p>
+     * <p>
+     * SSE Events emitted:
+     * <ul>
+     *   <li>{@code status} - Initial processing status</li>
+     *   <li>{@code token} - Individual tokens as they arrive</li>
+     *   <li>{@code complete} - Completion event with token count</li>
+     *   <li>{@code error} - Error events</li>
+     * </ul>
+     * </p>
      * 
      * @param sessionId the conversation session ID
      * @param request the message to send
-     * @return SSE stream of response chunks
+     * @return SSE stream of response tokens
      */
     @PostMapping(value = "/sessions/{sessionId}/messages", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter sendMessage(
+    public SseEmitter sendMessagePost(
             @PathVariable String sessionId,
-            @RequestBody SendMessageRequest request) {
-        logger.info("Sending message to session {}: {} chars", sessionId, request.message().length());
+            @RequestBody SendMessageRequest request,
+            HttpServletResponse response) {
+        return streamMessage(sessionId, request.message(), response);
+    }
+
+    /**
+     * Send a message to an existing session and stream the response via SSE (GET version).
+     * <p>
+     * This endpoint supports the native browser EventSource API which only works with GET requests.
+     * EventSource handles proxy buffering and chunked encoding better than fetch-based SSE parsing.
+     * </p>
+     * 
+     * @param sessionId the conversation session ID
+     * @param message the message to send (URL-encoded)
+     * @return SSE stream of response tokens
+     */
+    @GetMapping(value = "/sessions/{sessionId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter sendMessageGet(
+            @PathVariable String sessionId,
+            @RequestParam String message,
+            HttpServletResponse response) {
+        return streamMessage(sessionId, message, response);
+    }
+
+    /**
+     * Internal method to stream a message response via SSE.
+     */
+    private SseEmitter streamMessage(String sessionId, String message, HttpServletResponse response) {
+        logger.info("Streaming message to session {}: {} chars", sessionId, message.length());
+        
+        // Disable buffering for SSE - critical for Cloud Foundry and reverse proxies
+        // Note: Do NOT set Transfer-Encoding manually - Tomcat adds it automatically
+        // and setting it twice causes "too many transfer encodings" error in Go Router
+        response.setHeader("X-Accel-Buffering", "no");  // Nginx
+        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.setContentType(MediaType.TEXT_EVENT_STREAM_VALUE);
         
         SseEmitter emitter = new SseEmitter(600_000L); // 10 minutes timeout
         
         executorService.execute(() -> {
+            Stream<String> jsonStream = null;
             try {
                 if (!executor.isAvailable()) {
                     logger.error("Goose CLI is not available");
@@ -171,8 +224,6 @@ public class GooseChatController {
                     .data("Processing your request..."));
 
                 // Build options for this session
-                // Note: The wrapper automatically reads GOOSE_PROVIDER and GOOSE_MODEL
-                // from environment variables if not specified here
                 GooseOptions.Builder optionsBuilder = GooseOptions.builder()
                     .timeout(Duration.ofMinutes(10));
                 
@@ -186,56 +237,88 @@ public class GooseChatController {
 
                 GooseOptions options = optionsBuilder.build();
 
-                // Execute Goose with heartbeat support using native session management
-                // First message starts new session, subsequent messages resume
-                try {
-                    String prompt = request.message();
-                    boolean isFirstMessage = session.messageCount() == 0;
-                    
-                    // Use Goose's native --name and --resume flags for session continuity
-                    // See: https://block.github.io/goose/docs/guides/sessions/session-management/
-                    Future<String> future = executorService.submit(() -> 
-                        executor.executeInSession(sessionId, prompt, !isFirstMessage, options)
-                    );
-
-                    // Send heartbeat messages every 30 seconds while waiting for response
-                    long heartbeatIntervalMs = 30_000L;
-                    String response;
-                    
-                    while (true) {
-                        try {
-                            response = future.get(heartbeatIntervalMs, TimeUnit.MILLISECONDS);
-                            break;
-                        } catch (TimeoutException e) {
-                            // Still waiting for Goose - send heartbeat to keep connection alive
-                            emitter.send(SseEmitter.event()
-                                .name("heartbeat")
-                                .data("Still processing..."));
-                            logger.info("Sent heartbeat for session {}", sessionId);
+                // Execute Goose with streaming JSON output for token-level streaming
+                String prompt = message;
+                boolean isFirstMessage = session.messageCount() == 0;
+                
+                // Use streaming JSON for true real-time token streaming
+                jsonStream = executor.executeInSessionStreamingJson(
+                    sessionId, prompt, !isFirstMessage, options
+                );
+                
+                // Process each JSON event as it arrives
+                // Batch tokens to work around proxy buffering (e.g., Cloud Foundry Go Router)
+                final int[] tokenCount = {0};
+                final StringBuilder tokenBatch = new StringBuilder();
+                final long[] lastSendTime = {System.currentTimeMillis()};
+                final int BATCH_SIZE_THRESHOLD = 10; // Send after N tokens
+                final long BATCH_TIME_THRESHOLD_MS = 100; // Or after 100ms
+                
+                jsonStream.forEach(jsonLine -> {
+                    try {
+                        String token = extractTokenFromJson(jsonLine, sessionId);
+                        if (token != null) {
+                            tokenBatch.append(token);
+                            tokenCount[0]++;
+                            
+                            long now = System.currentTimeMillis();
+                            boolean shouldFlush = tokenCount[0] % BATCH_SIZE_THRESHOLD == 0 
+                                || (now - lastSendTime[0]) > BATCH_TIME_THRESHOLD_MS
+                                || token.contains("\n");  // Flush on newlines for better UX
+                            
+                            if (shouldFlush && !tokenBatch.isEmpty()) {
+                                emitter.send(SseEmitter.event()
+                                    .name("token")
+                                    .data(tokenBatch.toString()));
+                                tokenBatch.setLength(0);
+                                lastSendTime[0] = now;
+                            }
+                        } else if (jsonLine.contains("\"type\":\"complete\"")) {
+                            // Flush any remaining tokens before complete
+                            if (!tokenBatch.isEmpty()) {
+                                emitter.send(SseEmitter.event()
+                                    .name("token")
+                                    .data(tokenBatch.toString()));
+                                tokenBatch.setLength(0);
+                            }
+                            // Send complete event
+                            processCompleteEvent(jsonLine, emitter, sessionId);
                         }
+                    } catch (IOException e) {
+                        logger.error("Error sending SSE event for session {}", sessionId, e);
+                        throw new RuntimeException("SSE send failed", e);
                     }
-                    
-                    // Split response into lines for streaming effect
-                    String[] lines = response.split("\n");
-                    for (String line : lines) {
+                });
+                
+                // Flush any remaining tokens
+                if (!tokenBatch.isEmpty()) {
+                    try {
                         emitter.send(SseEmitter.event()
-                            .name("message")
-                            .data(line));
+                            .name("token")
+                            .data(tokenBatch.toString()));
+                    } catch (IOException e) {
+                        logger.error("Error flushing final tokens for session {}", sessionId, e);
                     }
+                }
+                
+                logger.info("Session {} sent {} tokens in batches", sessionId, tokenCount[0]);
+                
+                // Increment message count
+                session.incrementMessageCount();
+                
+                emitter.complete();
+                logger.info("Streaming message completed for session {}", sessionId);
                     
-                    // Increment message count
-                    session.incrementMessageCount();
-                    
-                    emitter.complete();
-                    logger.info("Message sent successfully to session {}", sessionId);
-                    
-                } catch (GooseExecutionException e) {
-                    logger.error("Goose execution failed for session {}", sessionId, e);
+            } catch (GooseExecutionException e) {
+                logger.error("Goose execution failed for session {}", sessionId, e);
+                try {
                     emitter.send(SseEmitter.event()
                         .name("error")
                         .data("Execution failed: " + e.getMessage()));
-                    emitter.completeWithError(e);
+                } catch (IOException ex) {
+                    logger.error("Failed to send error event", ex);
                 }
+                emitter.completeWithError(e);
             } catch (Exception e) {
                 logger.error("Unexpected error during message send to session {}", sessionId, e);
                 try {
@@ -246,6 +329,11 @@ public class GooseChatController {
                     logger.error("Failed to send error event", ex);
                 }
                 emitter.completeWithError(e);
+            } finally {
+                // Ensure stream is closed to clean up subprocess
+                if (jsonStream != null) {
+                    jsonStream.close();
+                }
             }
         });
 
@@ -259,6 +347,60 @@ public class GooseChatController {
         });
 
         return emitter;
+    }
+
+    /**
+     * Process a streaming JSON event from Goose CLI and emit corresponding SSE events.
+     * <p>
+     * JSON event formats:
+     * <ul>
+     *   <li>Message: {@code {"type":"message","message":{"content":[{"type":"text","text":"token"}],...}}}</li>
+     *   <li>Complete: {@code {"type":"complete","total_tokens":1234}}</li>
+     * </ul>
+     * </p>
+     */
+    /**
+     * Extract token text from a streaming JSON event.
+     * 
+     * @return the token text, or null if this is not a message event with text
+     */
+    private String extractTokenFromJson(String jsonLine, String sessionId) {
+        try {
+            JsonNode event = objectMapper.readTree(jsonLine);
+            String type = event.has("type") ? event.get("type").asText() : "";
+            
+            if ("message".equals(type)) {
+                JsonNode content = event.at("/message/content");
+                if (content.isArray() && !content.isEmpty()) {
+                    JsonNode firstContent = content.get(0);
+                    if (firstContent.has("text")) {
+                        String text = firstContent.get("text").asText();
+                        if (!text.isEmpty()) {
+                            return text;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to extract token from JSON for session {}: {}", sessionId, jsonLine, e);
+        }
+        return null;
+    }
+
+    /**
+     * Process a complete event from streaming JSON.
+     */
+    private void processCompleteEvent(String jsonLine, SseEmitter emitter, String sessionId) throws IOException {
+        try {
+            JsonNode event = objectMapper.readTree(jsonLine);
+            int totalTokens = event.has("total_tokens") ? event.get("total_tokens").asInt() : 0;
+            emitter.send(SseEmitter.event()
+                .name("complete")
+                .data(String.valueOf(totalTokens)));
+            logger.info("Session {} completed streaming with {} total LLM tokens", sessionId, totalTokens);
+        } catch (Exception e) {
+            logger.warn("Failed to parse complete event for session {}: {}", sessionId, jsonLine, e);
+        }
     }
 
     /**
