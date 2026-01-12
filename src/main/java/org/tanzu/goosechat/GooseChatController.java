@@ -55,6 +55,7 @@ public class GooseChatController {
     private static final String SESSION_PREFIX = "chat-";
     
     private final GooseExecutor executor;
+    private final GenaiModelConfiguration genaiModelConfiguration;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
     
@@ -66,8 +67,9 @@ public class GooseChatController {
         return t;
     });
 
-    public GooseChatController(GooseExecutor executor) {
+    public GooseChatController(GooseExecutor executor, GenaiModelConfiguration genaiModelConfiguration) {
         this.executor = executor;
+        this.genaiModelConfiguration = genaiModelConfiguration;
         logger.info("GooseChatController initialized with Goose native session support");
         
         // Schedule periodic session cleanup
@@ -202,18 +204,8 @@ public class GooseChatController {
                     .data("Processing your request..."));
 
                 // Build options for this session
-                GooseOptions.Builder optionsBuilder = GooseOptions.builder()
-                    .timeout(Duration.ofMinutes(10));
-                
-                // Override provider/model if session specifies them
-                if (session.provider() != null && !session.provider().isEmpty()) {
-                    optionsBuilder.provider(session.provider());
-                }
-                if (session.model() != null && !session.model().isEmpty()) {
-                    optionsBuilder.model(session.model());
-                }
-
-                GooseOptions options = optionsBuilder.build();
+                // Priority: 1. GenAI service (if available), 2. Session config, 3. Environment
+                GooseOptions options = buildGooseOptions(session);
 
                 // Execute Goose with streaming JSON output for token-level streaming
                 boolean isFirstMessage = session.messageCount() == 0;
@@ -581,6 +573,44 @@ public class GooseChatController {
         
         long timeSinceLastActivity = System.currentTimeMillis() - session.lastActivity();
         return timeSinceLastActivity < session.inactivityTimeout().toMillis();
+    }
+
+    /**
+     * Build GooseOptions for a session, using GenAI configuration if available.
+     * <p>
+     * Priority:
+     * <ol>
+     *   <li>GenAI service (if bound and has TOOLS-capable model)</li>
+     *   <li>Session-specified provider/model</li>
+     *   <li>Environment variables (GOOSE_PROVIDER, GOOSE_MODEL)</li>
+     * </ol>
+     * </p>
+     */
+    private GooseOptions buildGooseOptions(ConversationSession session) {
+        GooseOptions.Builder optionsBuilder = GooseOptions.builder()
+            .timeout(Duration.ofMinutes(10));
+
+        // Check for GenAI model first (takes precedence)
+        var genaiModel = genaiModelConfiguration.getModelInfo();
+        if (genaiModel.isPresent()) {
+            var modelInfo = genaiModel.get();
+            logger.debug("Using GenAI model: {} from {}", modelInfo.model(), modelInfo.baseUrl());
+            optionsBuilder
+                .provider("openai")  // GenAI provides OpenAI-compatible API
+                .model(modelInfo.model())
+                .apiKey(modelInfo.apiKey())
+                .baseUrl(modelInfo.baseUrl());
+        } else {
+            // Fall back to session config or environment
+            if (session.provider() != null && !session.provider().isEmpty()) {
+                optionsBuilder.provider(session.provider());
+            }
+            if (session.model() != null && !session.model().isEmpty()) {
+                optionsBuilder.model(session.model());
+            }
+        }
+
+        return optionsBuilder.build();
     }
 
     /**

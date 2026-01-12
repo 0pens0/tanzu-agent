@@ -92,6 +92,14 @@ export class ChatComponent {
     return this.healthInfo()?.message ?? '';
   }
 
+  protected get gooseModelSource(): string {
+    return this.healthInfo()?.source ?? 'unknown';
+  }
+
+  protected get isGenaiService(): boolean {
+    return this.healthInfo()?.source === 'genai-service';
+  }
+
   /**
    * Start a new conversation session
    */

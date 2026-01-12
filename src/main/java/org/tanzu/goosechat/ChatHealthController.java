@@ -15,9 +15,13 @@ import java.util.Optional;
 public class ChatHealthController {
 
     private final Optional<GooseExecutor> executor;
+    private final GenaiModelConfiguration genaiModelConfiguration;
 
-    public ChatHealthController(@Autowired(required = false) GooseExecutor executor) {
+    public ChatHealthController(
+            @Autowired(required = false) GooseExecutor executor,
+            GenaiModelConfiguration genaiModelConfiguration) {
         this.executor = Optional.ofNullable(executor);
+        this.genaiModelConfiguration = genaiModelConfiguration;
     }
 
     @GetMapping("/health")
@@ -28,6 +32,7 @@ public class ChatHealthController {
                 "not configured", 
                 getConfiguredProvider(),
                 getConfiguredModel(),
+                getModelSource(),
                 "Goose CLI is not configured. Please ensure GOOSE_CLI_PATH and an LLM provider API key are set."
             );
         }
@@ -42,14 +47,50 @@ public class ChatHealthController {
             version, 
             getConfiguredProvider(),
             getConfiguredModel(),
+            getModelSource(),
             message
         );
     }
 
+    /**
+     * Get the configured provider, checking GenAI first.
+     */
     private String getConfiguredProvider() {
+        // Check GenAI configuration first (takes precedence)
+        var genaiModel = genaiModelConfiguration.getModelInfo();
+        if (genaiModel.isPresent()) {
+            return "openai";  // GenAI provides OpenAI-compatible API
+        }
+        
+        // Fall back to environment configuration
         return getEnvOrElse("GOOSE_PROVIDER__TYPE",
                getEnvOrElse("GOOSE_PROVIDER",
                inferProviderFromApiKeys()));
+    }
+
+    /**
+     * Get the configured model, checking GenAI first.
+     */
+    private String getConfiguredModel() {
+        // Check GenAI configuration first (takes precedence)
+        var genaiModel = genaiModelConfiguration.getModelInfo();
+        if (genaiModel.isPresent()) {
+            return genaiModel.get().model();
+        }
+        
+        // Fall back to environment configuration
+        return getEnvOrElse("GOOSE_PROVIDER__MODEL",
+               getEnvOrElse("GOOSE_MODEL", "default"));
+    }
+
+    /**
+     * Get the source of the model configuration.
+     * 
+     * @return "genai-service" if using GenAI, "environment" otherwise
+     */
+    private String getModelSource() {
+        var genaiModel = genaiModelConfiguration.getModelInfo();
+        return genaiModel.isPresent() ? "genai-service" : "environment";
     }
 
     private String inferProviderFromApiKeys() {
@@ -59,11 +100,6 @@ public class ChatHealthController {
         if (isEnvSet("DATABRICKS_HOST")) return "databricks";
         if (isEnvSet("OLLAMA_HOST")) return "ollama";
         return "unknown";
-    }
-
-    private String getConfiguredModel() {
-        return getEnvOrElse("GOOSE_PROVIDER__MODEL",
-               getEnvOrElse("GOOSE_MODEL", "default"));
     }
 
     private String getEnvOrElse(String name, String fallback) {
@@ -76,11 +112,22 @@ public class ChatHealthController {
         return value != null && !value.isEmpty();
     }
 
+    /**
+     * Health response including model source information.
+     * 
+     * @param available whether Goose CLI is available
+     * @param version the Goose CLI version
+     * @param provider the LLM provider (e.g., "openai", "anthropic")
+     * @param model the model name
+     * @param source the source of model config ("genai-service" or "environment")
+     * @param message descriptive message
+     */
     public record HealthResponse(
         boolean available, 
         String version, 
         String provider,
         String model,
+        String source,
         String message
     ) {}
 }
