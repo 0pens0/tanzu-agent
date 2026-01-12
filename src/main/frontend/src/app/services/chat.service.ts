@@ -20,6 +20,8 @@ export interface HealthInfo {
   version: string;
   provider: string;
   model: string;
+  /** Source of model configuration: "genai-service" or "environment" */
+  source?: string;
   message?: string;
 }
 
@@ -343,6 +345,7 @@ export class ChatService {
           version: 'unknown',
           provider: 'unknown',
           model: 'unknown',
+          source: 'unknown',
           message: 'Health check endpoint not reachable' 
         };
       });

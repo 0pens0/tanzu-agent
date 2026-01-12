@@ -86,6 +86,24 @@
         width: 14px;
         height: 14px;
       }
+
+      // GenAI service badge styling
+      &.genai-service {
+        background-color: var(--mat-sys-tertiary-container);
+        color: var(--mat-sys-on-tertiary-container);
+      }
+
+      .source-badge {
+        margin-left: var(--mat-sys-spacing-1, 4px);
+        padding: 2px 6px;
+        background-color: var(--mat-sys-tertiary);
+        color: var(--mat-sys-on-tertiary);
+        border-radius: var(--mat-sys-corner-small, 4px);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
     }
   }
   
@@ -144,6 +162,12 @@
     font: var(--mat-sys-body-small);
     color: var(--mat-sys-on-surface-variant);
     animation: slideUpFade 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.35s backwards;
+
+    .source-indicator {
+      margin-left: var(--mat-sys-spacing-1, 4px);
+      color: var(--mat-sys-tertiary);
+      font-weight: 500;
+    }
   }
   
   .status-text {

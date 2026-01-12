@@ -14,9 +14,12 @@
             }
           </span>
           @if (gooseAvailable) {
-            <span class="provider-badge">
-              <mat-icon class="provider-icon">smart_toy</mat-icon>
+            <span class="provider-badge" [class.genai-service]="isGenaiService">
+              <mat-icon class="provider-icon">{{ isGenaiService ? 'cloud' : 'smart_toy' }}</mat-icon>
               {{ gooseProvider }} · {{ gooseModel }}
+              @if (isGenaiService) {
+                <span class="source-badge">GenAI</span>
+              }
             </span>
           }
         </div>
@@ -57,7 +60,12 @@
           <h2>Goose Agent Chat</h2>
           @if (gooseAvailable) {
             <p class="status-text">Goose v{{ gooseVersion }} is ready</p>
-            <p class="provider-info">Provider: {{ gooseProvider }} | Model: {{ gooseModel }}</p>
+            <p class="provider-info">
+              Provider: {{ gooseProvider }} | Model: {{ gooseModel }}
+              @if (isGenaiService) {
+                <span class="source-indicator">(via GenAI Service)</span>
+              }
+            </p>
             @if (sessionId()) {
               <p class="status-text info">Conversation session active - Goose will remember your conversation context</p>
             } @else if (isCreatingSession()) {
