@@ -11,6 +11,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MarkdownComponent } from 'ngx-markdown';
 import { ChatService, ChatMessage, HealthInfo } from '../../services/chat.service';
 import { ActivityPanelComponent } from '../activity-panel/activity-panel.component';
+import { ConfigPanelComponent } from '../config-panel/config-panel.component';
 
 @Component({
   selector: 'app-chat',
@@ -25,7 +26,8 @@ import { ActivityPanelComponent } from '../activity-panel/activity-panel.compone
     MatTooltipModule,
     MatSnackBarModule,
     MarkdownComponent,
-    ActivityPanelComponent
+    ActivityPanelComponent,
+    ConfigPanelComponent
   ],
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.scss'
@@ -40,6 +42,7 @@ export class ChatComponent {
   protected sessionId = signal<string | null>(null);
   protected isCreatingSession = signal(false);
   protected activityPanelCollapsed = signal(false);
+  protected configPanelCollapsed = signal(false);
   
   // Expose activities and todos from the service
   protected activities = computed(() => this.chatService.activities());
@@ -179,6 +182,10 @@ export class ChatComponent {
 
   protected toggleActivityPanel(): void {
     this.activityPanelCollapsed.update(v => !v);
+  }
+
+  protected toggleConfigPanel(): void {
+    this.configPanelCollapsed.update(v => !v);
   }
 
   protected sendMessage(): void {

@@ -1,4 +1,10 @@
 <div class="chat-layout">
+  <!-- Config Panel (Left) -->
+  <app-config-panel
+    [collapsed]="configPanelCollapsed()"
+    (collapseToggle)="toggleConfigPanel()"
+  />
+
   <div class="chat-container">
     <!-- Header with session controls -->
     <div class="chat-header">
@@ -24,6 +30,13 @@
           }
         </div>
         <div class="session-actions">
+          <button
+            mat-icon-button
+            (click)="toggleConfigPanel()"
+            [matTooltip]="configPanelCollapsed() ? 'Show config panel' : 'Hide config panel'"
+          >
+            <mat-icon>{{ configPanelCollapsed() ? 'settings' : 'settings' }}</mat-icon>
+          </button>
           <button
             mat-icon-button
             (click)="toggleActivityPanel()"
