@@ -42,6 +42,33 @@ export interface TodoItem {
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
 }
 
+export interface SkillInfo {
+  name: string;
+  description?: string;
+  /** Source type: "inline", "file", or "git" */
+  source: string;
+  path?: string;
+  repository?: string;
+  branch?: string;
+}
+
+export interface McpServerInfo {
+  name: string;
+  /** Transport type: "stdio" or "streamable_http" */
+  type: string;
+  url?: string;
+  command?: string;
+  args?: string[];
+}
+
+export interface GooseConfig {
+  provider?: string;
+  model?: string;
+  skills: SkillInfo[];
+  mcpServers: McpServerInfo[];
+  error?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -347,6 +374,22 @@ export class ChatService {
           model: 'unknown',
           source: 'unknown',
           message: 'Health check endpoint not reachable' 
+        };
+      });
+  }
+
+  /**
+   * Get Goose configuration including skills and MCP servers.
+   */
+  getConfig(): Promise<GooseConfig> {
+    return fetch('/api/config')
+      .then(response => response.json())
+      .catch(error => {
+        console.error('Config fetch failed:', error);
+        return {
+          skills: [],
+          mcpServers: [],
+          error: 'Configuration endpoint not reachable'
         };
       });
   }
