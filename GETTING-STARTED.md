@@ -65,7 +65,7 @@ export ANTHROPIC_API_KEY=sk-ant-xxxxx
 # export OPENAI_API_KEY=sk-xxxxx
 ```
 
-**For Cloud Foundry**, configure keys in `vars.yaml` or through CredHub (see [Cloud Foundry Deployment](#cloud-foundry-deployment)).
+**For Cloud Foundry**, configure keys in `target/vars.yaml` (local/dev) or through CredHub (see [Cloud Foundry Deployment](#cloud-foundry-deployment)).
 
 ---
 
@@ -329,7 +329,7 @@ applications:
 
 ### Using vars.yaml for Secrets
 
-For local deployments, create a `vars.yaml` file (excluded from git):
+For local deployments, create a `target/vars.yaml` file (excluded from git):
 
 ```yaml
 ANTHROPIC_API_KEY: sk-ant-xxxxx
@@ -339,7 +339,7 @@ OPENAI_API_KEY: sk-xxxxx
 Deploy with:
 
 ```bash
-cf push --vars-file vars.yaml
+cf push --vars-file target/vars.yaml
 ```
 
 ### Environment Variables
