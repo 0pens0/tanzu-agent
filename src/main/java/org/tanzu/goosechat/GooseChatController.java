@@ -56,6 +56,7 @@ public class GooseChatController {
     
     private final GooseExecutor executor;
     private final GenaiModelConfiguration genaiModelConfiguration;
+    private final ProviderConfiguration providerConfiguration;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
     
@@ -67,9 +68,13 @@ public class GooseChatController {
         return t;
     });
 
-    public GooseChatController(GooseExecutor executor, GenaiModelConfiguration genaiModelConfiguration) {
+    public GooseChatController(
+            GooseExecutor executor, 
+            GenaiModelConfiguration genaiModelConfiguration,
+            ProviderConfiguration providerConfiguration) {
         this.executor = executor;
         this.genaiModelConfiguration = genaiModelConfiguration;
+        this.providerConfiguration = providerConfiguration;
         logger.info("GooseChatController initialized with Goose native session support");
         
         // Schedule periodic session cleanup
@@ -132,6 +137,24 @@ public class GooseChatController {
                 }
                 provider = request.provider();
                 model = request.model();
+                
+                // Validate provider/model combination if both are provided
+                if (provider != null && model != null) {
+                    if (!providerConfiguration.validateProviderModel(provider, model)) {
+                        logger.warn("Invalid provider/model combination: {}/{}", provider, model);
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body(new CreateSessionResponse(null, false, 
+                                String.format("Invalid provider/model combination: %s/%s", provider, model)));
+                    }
+                } else if (provider != null) {
+                    // Validate provider exists and is enabled
+                    if (providerConfiguration.getProviderConfig(provider) == null) {
+                        logger.warn("Provider not available: {}", provider);
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body(new CreateSessionResponse(null, false, 
+                                String.format("Provider not available: %s", provider)));
+                    }
+                }
             }
 
             ConversationSession session = new ConversationSession(
@@ -686,8 +709,9 @@ public class GooseChatController {
      * Priority:
      * <ol>
      *   <li>GenAI service (if bound and has TOOLS-capable model)</li>
-     *   <li>Session-specified provider/model</li>
+     *   <li>Session-specified provider/model (from ProviderConfiguration)</li>
      *   <li>Environment variables (GOOSE_PROVIDER, GOOSE_MODEL)</li>
+     *   <li>Default from `.goose-config.yml`</li>
      * </ol>
      * </p>
      */
@@ -714,14 +738,37 @@ public class GooseChatController {
                 .model(modelInfo.model())
                 .apiKey(modelInfo.apiKey())
                 .baseUrl(modelInfo.baseUrl());
-        } else {
-            // Fall back to session config or environment
-            if (session.provider() != null && !session.provider().isEmpty()) {
+        } else if (session.provider() != null && !session.provider().isEmpty()) {
+            // Use session-specified provider from ProviderConfiguration
+            ProviderConfiguration.ProviderInfo providerConfig = providerConfiguration.getProviderConfig(session.provider());
+            if (providerConfig != null) {
+                String apiKey = providerConfiguration.getApiKey(session.provider());
+                String baseUrl = providerConfiguration.getBaseUrl(session.provider());
+                
+                logger.debug("Using configured provider: {} with model: {}", session.provider(), session.model());
+                
                 optionsBuilder.provider(session.provider());
+                if (session.model() != null && !session.model().isEmpty()) {
+                    optionsBuilder.model(session.model());
+                }
+                if (apiKey != null) {
+                    optionsBuilder.apiKey(apiKey);
+                }
+                if (baseUrl != null) {
+                    optionsBuilder.baseUrl(baseUrl);
+                }
+            } else {
+                // Fall back to environment variables or defaults
+                logger.debug("Provider {} not found in configuration, using environment/defaults", session.provider());
+                optionsBuilder.provider(session.provider());
+                if (session.model() != null && !session.model().isEmpty()) {
+                    optionsBuilder.model(session.model());
+                }
             }
-            if (session.model() != null && !session.model().isEmpty()) {
-                optionsBuilder.model(session.model());
-            }
+        } else {
+            // No session provider specified - use environment or defaults
+            // This maintains backward compatibility
+            logger.debug("No provider specified in session, using environment/defaults");
         }
 
         return optionsBuilder.build();

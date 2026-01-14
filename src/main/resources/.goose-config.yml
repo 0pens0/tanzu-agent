@@ -112,9 +112,28 @@ mcpServers:
   - name: tanzu-platform
     type: streamable_http
     url: "https://tanzu-mcp-server.apps.tp.penso.io/mcp"
-  - name: github
+  - name: github-mcp-server
     type: streamable_http
     url: "https://github-mcp-server.apps.tp.penso.io/mcp"
+    headers:
+      # Do NOT hardcode tokens here. Set GITHUB_TOKEN (or use CredHub) at runtime.
+      Authorization: "Bearer ${GITHUB_TOKEN}"
+    autoApprove:
+      - mcp_github-mcp-server_create_branch
+      - mcp_github-mcp-server_delete_file
+      - mcp_github-mcp-server_create_or_update_file
+      - mcp_github-mcp-server_push_files
+      - mcp_github-mcp-server_get_file_contents
+      - mcp_github-mcp-server_list_issues
+      - mcp_github-mcp-server_get_issue
+      - mcp_github-mcp-server_create_issue
+      - mcp_github-mcp-server_update_issue
+      - mcp_github-mcp-server_add_issue_comment
+      - mcp_github-mcp-server_list_commits
+      - mcp_github-mcp-server_get_commit
+      - mcp_github-mcp-server_search_code
+      - mcp_github-mcp-server_search_issues
+      - mcp_github-mcp-server_search_repositories
   - name: bosh
     type: streamable_http
     url: "https://bosh-mcp-server.apps.tp.penso.io/mcp"
