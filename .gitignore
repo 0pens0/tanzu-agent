@@ -1,5 +1,6 @@
 # Secrets and credentials
 /vars.yaml
+manifest.yml
 
 # Maven build output
 /target/
