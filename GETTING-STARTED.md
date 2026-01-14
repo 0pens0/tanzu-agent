@@ -67,6 +67,34 @@ export ANTHROPIC_API_KEY=sk-ant-xxxxx
 
 **For Cloud Foundry**, configure keys in `target/vars.yaml` (local/dev) or through CredHub (see [Cloud Foundry Deployment](#cloud-foundry-deployment)).
 
+### Mailgun Configuration (for Email Sending)
+
+The Mailgun skill allows Goose to send emails via the Mailgun API. Configure the following environment variables:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `MAILGUN_API_KEY` | Your Mailgun API key | `key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+| `MAILGUN_DOMAIN` | Your Mailgun domain | `mg.yourdomain.com` or `mail.yourdomain.com` |
+| `MAILGUN_FROM_EMAIL` | Sender email address | `Tanzu Agent <noreply@yourdomain.com>` |
+
+**For local development**, set environment variables:
+
+```bash
+export MAILGUN_API_KEY=key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+export MAILGUN_DOMAIN=mg.yourdomain.com
+export MAILGUN_FROM_EMAIL="Tanzu Agent <noreply@yourdomain.com>"
+```
+
+**For Cloud Foundry**, add to `target/vars.yaml`:
+
+```yaml
+MAILGUN_API_KEY: "key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+MAILGUN_DOMAIN: "mg.yourdomain.com"
+MAILGUN_FROM_EMAIL: "Tanzu Agent <noreply@yourdomain.com>"
+```
+
+The Mailgun skill is already configured in `.goose-config.yml` and will automatically use these environment variables when sending emails.
+
 ---
 
 ## Adding MCP Servers
