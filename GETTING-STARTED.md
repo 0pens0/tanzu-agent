@@ -254,7 +254,7 @@ cf push
 Or with variable substitution for secrets:
 
 ```bash
-cf push --vars-file vars.yaml
+cf push --vars-file target/vars.yaml
 ```
 
 #### What Happens During Deployment
@@ -298,7 +298,7 @@ After modifying `.goose-config.yml` or other resources:
 
 ```bash
 # Rebuild and redeploy in one step
-mvn clean package && cf push --vars-file vars.yaml
+mvn clean package && cf push --vars-file target/vars.yaml
 ```
 
 ---
