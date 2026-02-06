@@ -30,6 +30,13 @@ The `.goose-config.yml` file is located in `src/main/resources/` and gets bundle
 
 ## Configuring LLM Providers
 
+There are two ways to configure which LLM model to use:
+
+1. **Tanzu GenAI Service Binding** (recommended for Cloud Foundry) - Bind a GenAI service from Tanzu Marketplace, and models are automatically discovered
+2. **Manual Configuration** - Set provider and model in `.goose-config.yml` with API keys
+
+> **Note:** GenAI service bindings take precedence over manual configuration. See [Tanzu Marketplace Integration](#tanzu-marketplace-integration) for details.
+
 ### Supported Providers
 
 Goose supports multiple LLM providers:
@@ -42,9 +49,9 @@ Goose supports multiple LLM providers:
 | Databricks | `DATABRICKS_HOST`, `DATABRICKS_TOKEN` | databricks-meta-llama-3-1-70b-instruct |
 | Ollama | `OLLAMA_HOST` | llama3.1, codellama |
 
-### Setting the Provider and Model
+### Setting the Provider and Model (Manual Configuration)
 
-Edit `.goose-config.yml` to configure your preferred provider:
+For manual configuration, edit `.goose-config.yml` to set your preferred provider:
 
 ```yaml
 # LLM Provider configuration
