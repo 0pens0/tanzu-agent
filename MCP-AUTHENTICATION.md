@@ -28,6 +28,25 @@ document. Goose Agent Chat discovers the authorization server, then follows
 to find the authorize and token endpoints. Authentication uses the OAuth 2.1
 Authorization Code flow with PKCE.
 
+### Architecture Overview
+
+The following diagram shows the high-level architecture of the OAuth flow
+between goose-agent-chat (OAuth Client), cf-auth-mcp (Resource Server), and
+Tanzu SSO / UAA (Authorization Server). Both applications are bound to the
+same p-identity service instance, which establishes a shared trust domain.
+
+![OAuth Authorization Flow Architecture](images/oauth-flow-architecture.png)
+
+### SSO Service Binding Architecture
+
+Both goose-agent-chat and cf-auth-mcp are bound to the same p-identity (Tanzu
+SSO) service instance, but each receives its own client registration with a
+unique `client_id`. The shared trust domain — same JWT signing keys, same
+authorization server — is what allows tokens obtained through goose-agent-chat
+to be validated by cf-auth-mcp.
+
+![SSO Service Binding Architecture](images/sso-binding-architecture.png)
+
 ### Discovery Chain
 
 ```
@@ -69,6 +88,25 @@ mcpServers:
 | `clientId` | OAuth client ID registered with the authorization server | Yes (unless dynamic registration is supported) |
 | `clientSecret` | OAuth client secret | Yes (for confidential clients) |
 | `scopes` | Space-separated list of OAuth scopes to request | Recommended (auto-discovered if omitted) |
+
+### Authentication Flow
+
+The following sequence diagram shows the full OAuth authentication flow that
+occurs when a user clicks the "OAuth Connect" button. It covers RFC 9728
+discovery, RFC 8414 authorization server metadata, PKCE code challenge
+generation, user login at the SSO page, and the authorization code exchange.
+
+![Part 1: OAuth Authentication Flow](images/part-1-authentication-flow.png)
+
+### Authenticated Request Flow
+
+After authentication, the following flow occurs each time the user sends a
+chat message that triggers an MCP tool call. The bearer token is injected into
+the Goose configuration, sent to cf-auth-mcp, validated against UAA's signing
+keys, and then relayed to the Cloud Foundry API where RBAC enforcement ensures
+the user can only access resources permitted by their CF roles.
+
+![Part 2: Authenticated Chat Request Flow](images/part-2-chat-request-flow.png)
 
 ### User Experience
 
