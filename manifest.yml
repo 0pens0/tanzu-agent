@@ -12,12 +12,9 @@ applications:
       APP_AUTH_SECRET: ((APP_AUTH_SECRET))
       # Provider/model configuration is in .goose-config.yml (src/main/resources)
       # API key for the configured provider (set via CredHub or cf set-env):
-      OPENAI_API_KEY: ((OPENAI_API_KEY))
+      # OPENAI_API_KEY: ((OPENAI_API_KEY))
       # ANTHROPIC_API_KEY: ((ANTHROPIC_API_KEY))
       # GOOGLE_API_KEY: ((GOOGLE_API_KEY))
       # DATABRICKS_HOST: ((DATABRICKS_HOST))
       # DATABRICKS_TOKEN: ((DATABRICKS_TOKEN))
-      MAILGUN_API_KEY: ((MAILGUN_API_KEY))
-      GITHUB_OAUTH_CLIENT_ID: ((GITHUB_OAUTH_CLIENT_ID))
-      GITHUB_OAUTH_CLIENT_SECRET: ((GITHUB_OAUTH_CLIENT_SECRET))
-      GOOGLE_CHAT_SPACES: ((GOOGLE_CHAT_SPACES))
+
