@@ -17,6 +17,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
@@ -223,6 +225,7 @@ public class GooseChatController {
                 final long[] lastSendTime = {System.currentTimeMillis()};
                 final int BATCH_SIZE_THRESHOLD = 10; // Send after N tokens
                 final long BATCH_TIME_THRESHOLD_MS = 100; // Or after 100ms
+                final List<String> toolCallLog = new ArrayList<>();
                 
                 jsonStream.forEach(jsonLine -> {
                     try {
@@ -232,7 +235,7 @@ public class GooseChatController {
                         switch (eventType) {
                             case "message" -> {
                                 // Check for tool requests in the message content
-                                String activityJson = extractToolActivityFromMessage(event, sessionId);
+                                String activityJson = extractToolActivityFromMessage(event, sessionId, toolCallLog);
                                 if (activityJson != null) {
                                     emitter.send(SseEmitter.event()
                                         .name("activity")
@@ -306,6 +309,9 @@ public class GooseChatController {
                 }
                 
                 logger.info("Session {} sent {} tokens in batches", sessionId, tokenCount[0]);
+                if (!toolCallLog.isEmpty()) {
+                    logger.info("Session {} tool call summary: {}", sessionId, String.join(", ", toolCallLog));
+                }
                 
                 // Increment message count
                 session.incrementMessageCount();
@@ -387,9 +393,10 @@ public class GooseChatController {
      *   }
      * }
      * 
+     * @param toolCallLog mutable list to accumulate tool names for the summary log
      * @return JSON string for the activity event, or null if no tool activity
      */
-    private String extractToolActivityFromMessage(JsonNode event, String sessionId) {
+    private String extractToolActivityFromMessage(JsonNode event, String sessionId, List<String> toolCallLog) {
         JsonNode content = event.at("/message/content");
         if (!content.isArray()) {
             return null;
@@ -422,6 +429,10 @@ public class GooseChatController {
                     String extensionId = parsedTool.extensionId();
                     String shortToolName = parsedTool.toolName();
                     
+                    logger.info("Session {} tool_request: {} ({}) args: {}", 
+                        sessionId, shortToolName, extensionId, arguments);
+                    toolCallLog.add(shortToolName);
+                    
                     // Build activity JSON
                     var activityNode = objectMapper.createObjectNode();
                     activityNode.put("id", id);
@@ -443,6 +454,9 @@ public class GooseChatController {
                 try {
                     String id = item.has("id") ? item.get("id").asText() : "";
                     boolean isError = item.has("is_error") && item.get("is_error").asBoolean();
+                    
+                    logger.info("Session {} tool_response: {} (id: {})", 
+                        sessionId, isError ? "error" : "completed", id);
                     
                     var activityNode = objectMapper.createObjectNode();
                     activityNode.put("id", id);

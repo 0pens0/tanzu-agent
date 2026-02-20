@@ -80,10 +80,11 @@ The helper script automatically:
 
 The script parses Server-Sent Events (SSE) and displays:
 - **Token events**: Goose's text response (concatenated and displayed in real-time)
+- **Tool call events**: MCP tool invocations shown as `[Tool Call: extension/toolName]` in yellow
 - **Complete event**: Final token count
 - **Error events**: Any errors that occur
 
-Activity events (tool calls) are tracked but not displayed to reduce noise.
+Tool call events are displayed on stderr so they don't interfere with the response text on stdout. Use these to verify which MCP tools Goose actually invoked during a conversation (e.g., to evaluate conformance with expected agent flows).
 
 ### Manual Implementation (if needed)
 

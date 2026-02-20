@@ -191,8 +191,12 @@ send_message() {
                     echo -e "\n${RED}✗ Error: $data${NC}" >&2
                     ;;
                 activity)
-                    # Optionally show activity (tool calls) - currently suppressed
-                    # echo -e "\n${YELLOW}[Activity: $data]${NC}" >&2
+                    tool_name=$(echo "$data" | jq -r '.toolName // empty' 2>/dev/null)
+                    ext_id=$(echo "$data" | jq -r '.extensionId // empty' 2>/dev/null)
+                    act_type=$(echo "$data" | jq -r '.type // empty' 2>/dev/null)
+                    if [ "$act_type" = "tool_request" ] && [ -n "$tool_name" ]; then
+                        echo -e "\n${YELLOW}[Tool Call: ${ext_id}/${tool_name}]${NC}" >&2
+                    fi
                     ;;
             esac
         fi
