@@ -4,7 +4,7 @@ applications:
     path: target/goose-agent-chat-1.0.0.jar
     memory: 2G
     buildpacks:
-      - https://github.com/cpage-pivotal/goose-buildpack#bearer
+      - https://github.com/cpage-pivotal/goose-buildpack
       - java_buildpack_offline
     env:
       JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 21.+ } }'
