@@ -73,16 +73,10 @@
         }
 
         .copy-session-btn {
-          width: 20px;
-          height: 20px;
-          line-height: 20px;
-
-          .mat-icon {
-            font-size: 14px;
-            width: 14px;
-            height: 14px;
-            color: var(--mat-sys-on-surface-variant);
-          }
+          --mdc-icon-button-state-layer-size: 24px;
+          --mdc-icon-button-icon-size: 14px;
+          padding: 0;
+          color: var(--mat-sys-on-surface-variant);
         }
       }
     }
