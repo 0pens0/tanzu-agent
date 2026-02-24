@@ -14,7 +14,17 @@
           <span class="session-text">
             @if (sessionId()) {
               <strong>Active Conversation</strong>
-              <span class="session-id">Session: {{ sessionId()?.substring(0, 8) }}...</span>
+              <span class="session-id-row">
+                <span class="session-id">Session: {{ sessionId()?.substring(0, 8) }}...</span>
+                <button
+                  mat-icon-button
+                  (click)="copySessionId()"
+                  matTooltip="Copy session ID to clipboard"
+                  class="copy-session-btn"
+                >
+                  <mat-icon>content_copy</mat-icon>
+                </button>
+              </span>
             } @else {
               <strong>No Active Session</strong>
             }

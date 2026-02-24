@@ -161,6 +161,25 @@ export class ChatComponent {
   /**
    * End the current conversation
    */
+  protected async copySessionId(): Promise<void> {
+    const id = this.sessionId();
+    if (!id) return;
+    try {
+      await navigator.clipboard.writeText(id);
+      this.snackBar.open('Session ID copied to clipboard', 'Close', {
+        duration: 2000,
+        horizontalPosition: 'center',
+        verticalPosition: 'bottom'
+      });
+    } catch {
+      this.snackBar.open('Failed to copy session ID', 'Close', {
+        duration: 3000,
+        horizontalPosition: 'center',
+        verticalPosition: 'bottom'
+      });
+    }
+  }
+
   protected async endConversation(): Promise<void> {
     const currentSessionId = this.sessionId();
     if (!currentSessionId) {

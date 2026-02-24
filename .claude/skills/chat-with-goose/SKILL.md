@@ -16,6 +16,18 @@
 - **Password Cache:** /tmp/goose-chat-password.txt
 - **URL Cache:** /tmp/goose-chat-url.txt
 
+## Session ID Handoff
+
+To reuse a browser session (e.g., one where MCP OAuth authentication has already been completed), pass the session ID with `--session`:
+
+```bash
+./.claude/skills/chat-with-goose/goose-chat-helper.sh --session chat-a1b2c3d4 "Your message"
+```
+
+The session ID is validated against the server. If the session is still active (within 30-minute inactivity window), it will be reused and all MCP OAuth tokens associated with that session will be available. If the session has expired, a new session is created automatically.
+
+The UI provides a **copy session ID** button (clipboard icon next to the truncated session ID in the header) that copies the full session ID to the clipboard.
+
 ## Instructions
 
 When the user wants to chat with the Goose Agent Chat application, use the helper script.

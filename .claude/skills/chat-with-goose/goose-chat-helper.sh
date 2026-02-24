@@ -9,6 +9,7 @@ DEFAULT_APP_URL="https://goose-agent-chat.apps.tas-ndc.kuhn-labs.com"
 APP_URL=""  # Will be set from argument, cache, or default
 USERNAME="user"
 PASSWORD=""  # Will be provided as argument or prompted
+SESSION_ID=""  # Will be provided as argument or read from cache
 COOKIE_FILE="/tmp/goose-chat-cookies.txt"
 SESSION_FILE="/tmp/goose-chat-session.txt"
 PASSWORD_FILE="/tmp/goose-chat-password.txt"
@@ -228,6 +229,14 @@ main() {
                 PASSWORD="$2"
                 shift 2
                 ;;
+            --session=*)
+                SESSION_ID="${1#*=}"
+                shift
+                ;;
+            --session)
+                SESSION_ID="$2"
+                shift 2
+                ;;
             *)
                 # Everything else is part of the message
                 if [ -z "$message" ]; then
@@ -242,16 +251,18 @@ main() {
 
     # Check if message is provided
     if [ -z "$message" ]; then
-        echo "Usage: $0 [--url URL] [--password PASSWORD] <message>"
+        echo "Usage: $0 [--url URL] [--password PASSWORD] [--session SESSION_ID] <message>"
         echo ""
         echo "Examples:"
         echo "  $0 \"What are Spring Boot best practices?\""
         echo "  $0 --password=tanzu \"How do I optimize queries?\""
         echo "  $0 --url https://my-app.example.com --password tanzu \"Hello\""
+        echo "  $0 --session chat-a1b2c3d4 \"Use my browser session with MCP auth\""
         echo ""
         echo "Options:"
-        echo "  --url URL        Application URL (default: $DEFAULT_APP_URL)"
-        echo "  --password PWD   Password for authentication (cached after first use)"
+        echo "  --url URL          Application URL (default: $DEFAULT_APP_URL)"
+        echo "  --password PWD     Password for authentication (cached after first use)"
+        echo "  --session ID       Reuse an existing session (e.g. one with MCP OAuth tokens)"
         echo ""
         echo "Cached files:"
         echo "  URL:      $URL_FILE"
@@ -259,6 +270,11 @@ main() {
         echo "  Session:  $SESSION_FILE"
         echo "  Cookies:  $COOKIE_FILE"
         exit 1
+    fi
+
+    # If a session ID was provided, seed the session cache with it
+    if [ -n "$SESSION_ID" ]; then
+        echo "$SESSION_ID" > "$SESSION_FILE"
     fi
 
     # Get the URL to use (from argument, cache, or default)

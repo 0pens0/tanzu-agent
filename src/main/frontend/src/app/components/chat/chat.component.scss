@@ -61,10 +61,29 @@
         font-weight: 600;
       }
       
-      .session-id {
-        font: var(--mat-sys-body-small);
-        color: var(--mat-sys-on-surface-variant);
-        font-family: 'Roboto Mono', monospace;
+      .session-id-row {
+        display: flex;
+        align-items: center;
+        gap: 0;
+
+        .session-id {
+          font: var(--mat-sys-body-small);
+          color: var(--mat-sys-on-surface-variant);
+          font-family: 'Roboto Mono', monospace;
+        }
+
+        .copy-session-btn {
+          width: 20px;
+          height: 20px;
+          line-height: 20px;
+
+          .mat-icon {
+            font-size: 14px;
+            width: 14px;
+            height: 14px;
+            color: var(--mat-sys-on-surface-variant);
+          }
+        }
       }
     }
     
