@@ -214,6 +214,7 @@ public class GooseChatController {
 
                 // Execute Goose with streaming JSON output for token-level streaming
                 boolean isFirstMessage = session.messageCount() == 0;
+                
                 jsonStream = executor.executeInSessionStreamingJson(
                     sessionId, message, !isFirstMessage, options
                 );
