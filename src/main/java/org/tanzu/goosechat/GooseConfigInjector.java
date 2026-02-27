@@ -48,6 +48,7 @@ public class GooseConfigInjector {
      * @param sessionId the user's session ID
      */
     public void injectOAuthTokens(String sessionId) {
+        logger.debug("injectOAuthTokens called for sessionId={}", sessionId);
         try {
             GooseConfiguration config = executor.getConfiguration();
             Path configPath = findConfigPath();
@@ -61,11 +62,13 @@ public class GooseConfigInjector {
             boolean modified = false;
 
             for (McpServerInfo server : config.mcpServers()) {
+                logger.debug("Checking server {} for auth, requiresAuth={}", server.name(), server.requiresAuth());
                 if (!server.requiresAuth()) {
                     continue;
                 }
 
                 Optional<String> accessToken = oauthController.getAccessToken(server.name(), sessionId);
+                logger.debug("getAccessToken for server {}: hasToken={}", server.name(), accessToken.isPresent());
                 if (accessToken.isEmpty()) {
                     logger.debug("No OAuth token for server {} in session {}", server.name(), sessionId);
                     continue;
@@ -74,7 +77,6 @@ public class GooseConfigInjector {
                 String token = accessToken.get();
                 logger.info("Injecting OAuth token for server {} in session {}", server.name(), sessionId);
 
-                // Check if we need to add or update the Authorization header
                 configContent = injectAuthorizationHeader(configContent, server.name(), token);
                 modified = true;
             }

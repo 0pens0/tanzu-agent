@@ -151,7 +151,7 @@ public class McpOAuthController {
             String redirectUri = baseUrl + "/oauth/callback";
             
             // Determine client ID: use pre-registered client ID if available,
-            // otherwise use Client ID Metadata Document URL (for servers with dynamic registration)
+            // otherwise pass null to trigger Dynamic Client Registration (DCR)
             String clientId;
             String clientSecret = null;
             if (serverInfo.hasClientCredentials()) {
@@ -159,8 +159,8 @@ public class McpOAuthController {
                 clientSecret = serverInfo.clientSecret();
                 logger.info("Using pre-registered client ID for server: {}", serverName);
             } else {
-                clientId = baseUrl + "/oauth/client-metadata.json";
-                logger.info("Using Client ID Metadata Document URL for server: {}", serverName);
+                clientId = null;
+                logger.info("No pre-registered client ID, will use Dynamic Client Registration for server: {}", serverName);
             }
             
             // Get or create a shared OAuth manager for this server
