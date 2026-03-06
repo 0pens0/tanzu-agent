@@ -6,10 +6,12 @@ applications:
     buildpacks:
       - https://github.com/cpage-pivotal/goose-buildpack
       - java_buildpack_offline
+    services:
+      - agent-sso
     env:
       JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 21.+ } }'
       GOOSE_ENABLED: true
-      APP_AUTH_SECRET: ((APP_AUTH_SECRET))
+      # GOOSE_VERSION: 1.27.1
       # Provider/model configuration is in .goose-config.yml (src/main/resources)
       # API key for the configured provider (set via CredHub or cf set-env):
       # OPENAI_API_KEY: ((OPENAI_API_KEY))
@@ -17,4 +19,3 @@ applications:
       # GOOGLE_API_KEY: ((GOOGLE_API_KEY))
       # DATABRICKS_HOST: ((DATABRICKS_HOST))
       # DATABRICKS_TOKEN: ((DATABRICKS_TOKEN))
-
