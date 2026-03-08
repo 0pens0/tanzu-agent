@@ -45,7 +45,7 @@
         <dependency>
             <groupId>org.tanzu.goose</groupId>
             <artifactId>goose-cf-wrapper</artifactId>
-            <version>1.2.0</version>
+            <version>2.0.0</version>
         </dependency>
         <!-- java-cfenv-boot-tanzu-genai is now provided transitively by goose-cf-wrapper -->
 
@@ -165,28 +165,6 @@
                                     <filtering>false</filtering>
                                 </resource>
                             </resources>
-                        </configuration>
-                    </execution>
-                    <!-- Copy static login page and theme after Angular build (to ensure they're not overwritten) -->
-                    <execution>
-                        <id>copy-static-login</id>
-                        <phase>prepare-package</phase>
-                        <goals>
-                            <goal>copy-resources</goal>
-                        </goals>
-                        <configuration>
-                            <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
-                            <resources>
-                                <resource>
-                                    <directory>src/main/resources/static</directory>
-                                    <includes>
-                                        <include>login.html</include>
-                                        <include>theme.css</include>
-                                    </includes>
-                                    <filtering>false</filtering>
-                                </resource>
-                            </resources>
-                            <overwrite>true</overwrite>
                         </configuration>
                     </execution>
                 </executions>

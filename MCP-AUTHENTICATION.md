@@ -11,6 +11,7 @@ it, and provides configuration examples.
 | Method | Interactive | Token Refresh | Per-User Identity | Configuration Complexity |
 |---|---|---|---|---|
 | [OAuth 2.0 with RFC 9728 Discovery](#1-oauth-20-with-rfc-9728-discovery) | Yes (popup) | Automatic | Yes | High |
+| [OAuth 2.0 with RFC 9728 + Dynamic Client Registration](#1b-oauth-20-with-rfc-9728--dynamic-client-registration-rfc-7591) | Yes (popup) | Automatic | Yes | Low |
 | [OAuth 2.0 with Provider-Specific Flow](#2-oauth-20-with-provider-specific-flow) | Yes (popup) | Automatic | Yes | Medium |
 | [API Key Header](#3-api-key-header) | No | Not applicable | No | Low |
 | [Static Bearer Token](#4-static-bearer-token) | No | None (manual) | Depends on token | Low |
@@ -137,10 +138,123 @@ mcpServers:
 **Prerequisites:**
 - goose-agent-chat's SSO client redirect URI allowlist must include
   `https://goose-agent-chat.apps.example.com/oauth/callback`
-- The `clientId` and `clientSecret` are from goose-agent-chat's own SSO binding
-  (not the MCP server's binding)
+- The `clientId` and `clientSecret` are from **the OAuth client app's own SSO
+  binding** — not the MCP server's binding (see
+  [Client ID Semantics](#client-id-semantics-uaa-vs-provider-hosted) below)
 - Both apps must be bound to the same SSO service instance for token validation
   to succeed
+
+---
+
+## 1b. OAuth 2.0 with RFC 9728 + Dynamic Client Registration (RFC 7591)
+
+**Standards-based OAuth 2.0 flow with automatic endpoint discovery _and_ automatic
+client registration — no pre-configured `clientId` or `clientSecret` required.**
+
+When the authorization server advertises a `registration_endpoint` in its
+[RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) metadata, the
+goose-buildpack Java wrapper can register itself at runtime using
+[RFC 7591 (OAuth 2.0 Dynamic Client Registration)](https://datatracker.ietf.org/doc/html/rfc7591).
+This eliminates the need to pre-register an OAuth application or pre-configure
+redirect URIs.
+
+### How It Works
+
+The goose-buildpack `McpOAuthManagerImpl` extends the standard RFC 9728
+discovery flow with a lazy DCR step:
+
+```
+1. Client discovers OAuth config via RFC 9728 + RFC 8414 (same as Method 1)
+2. Authorization Server Metadata includes registration_endpoint
+3. If no clientId is configured, the wrapper POSTs a registration request:
+     POST /register
+     Content-Type: application/json
+
+     {
+       "client_name": "Goose Agent Chat",
+       "redirect_uris": ["https://goose-agent-chat.apps.example.com/oauth/callback"],
+       "grant_types": ["authorization_code", "refresh_token"],
+       "response_types": ["code"],
+       "token_endpoint_auth_method": "none"
+     }
+4. The server returns a dynamically assigned client_id (and optionally a client_secret)
+5. The wrapper caches the credentials and proceeds with Authorization Code + PKCE
+```
+
+### Key Implementation Details
+
+| Aspect | Detail |
+|---|---|
+| Specification | [RFC 7591 — OAuth 2.0 Dynamic Client Registration Protocol](https://datatracker.ietf.org/doc/html/rfc7591) |
+| Implementation | `OAuthDiscoveryService.performDynamicClientRegistration()` in goose-buildpack's `java-wrapper` |
+| Trigger condition | `McpOAuthConfig.requiresDynamicClientRegistration()` returns `true` when no `clientId` is configured and `registrationEndpoint` is present |
+| Client type | Public client (`token_endpoint_auth_method: "none"`) — no client secret required |
+| Credential caching | Dynamic credentials are cached per server name in `McpOAuthManagerImpl.dynamicClientStore` and reused for subsequent authorization flows |
+| Redirect URI | Computed at authorization time and included in the DCR request body |
+
+### When to Use
+
+- The MCP server's authorization server supports RFC 7591 Dynamic Client
+  Registration (advertises `registration_endpoint` in its metadata)
+- You want zero-configuration OAuth — no need to register an OAuth app or
+  manage client credentials
+- The authorization server does not require pre-registered redirect URIs
+
+### Configuration
+
+Because DCR handles client registration automatically, the configuration is
+minimal — simply omit `clientId` and `clientSecret`:
+
+```yaml
+mcpServers:
+  - name: jira
+    type: streamable_http
+    url: "https://mcp-gateway-jira-prod.apps.example.com/jira/mcp"
+    requiresAuth: true
+    scopes: "read:jira-work write:jira-work"
+```
+
+### Configuration Fields
+
+| Field | Description | Required |
+|---|---|---|
+| `requiresAuth` | Must be `true` to enable the OAuth flow | Yes |
+| `clientId` | Omit — the wrapper registers dynamically | No |
+| `clientSecret` | Omit — public client registration | No |
+| `scopes` | Space-separated list of OAuth scopes to request | Recommended |
+
+### Difference from Method 1
+
+| | Method 1 (Pre-Registered Client) | Method 1b (Dynamic Registration) |
+|---|---|---|
+| Client ID source | Pre-configured in `.goose-config.yml` | Obtained at runtime via RFC 7591 |
+| Client type | Confidential (with secret) | Public (`token_endpoint_auth_method: "none"`) |
+| Redirect URI registration | Manual (pre-registered with auth server) | Automatic (sent in DCR request) |
+| Auth server requirement | Standard OAuth 2.0 | Must support RFC 7591 |
+| Configuration complexity | High (register app, obtain credentials) | Low (just set `requiresAuth: true`) |
+
+### Authorization Server Compatibility
+
+DCR requires server-side support. The authorization server must:
+
+1. Advertise `registration_endpoint` in its
+   `/.well-known/oauth-authorization-server` metadata
+2. Accept unauthenticated registration requests (open registration)
+3. Return at minimum a `client_id` in the registration response
+
+| Authorization Server | DCR Supported |
+|---|---|
+| MCP-compliant gateways (e.g., Tanzu MCP Gateway) | Yes |
+| GitHub OAuth | No |
+| Tanzu SSO / UAA | No |
+| Okta | Yes (with feature flag) |
+| Auth0 | Yes (Management API) |
+
+### User Experience
+
+Same as [Method 1](#1-oauth-20-with-rfc-9728-discovery) — the user clicks
+"OAuth Connect", authenticates in a popup, and the connection is established.
+The DCR step is invisible to the user.
 
 ---
 
@@ -206,9 +320,13 @@ mcpServers:
 
 **Prerequisites:**
 - Register an OAuth App at https://github.com/settings/developers
-- Set the callback URL to `https://goose-agent-chat.apps.example.com/oauth/callback`
+- Add each consuming application's callback URL to the OAuth App (e.g.,
+  `https://goose-agent-chat.apps.example.com/oauth/callback` and
+  `https://agent-credential-broker.apps.example.com/oauth/callback`)
 - Set `GITHUB_OAUTH_CLIENT_ID` and `GITHUB_OAUTH_CLIENT_SECRET` as environment
-  variables
+  variables — these are the **same values** for every application that uses
+  this GitHub OAuth App (see
+  [Client ID Semantics](#client-id-semantics-uaa-vs-provider-hosted) below)
 
 ### Difference from Method 1
 
@@ -368,6 +486,70 @@ appears as connected immediately.
 
 ---
 
+## Client ID Semantics: UAA vs Provider-Hosted
+
+Methods 1 and 2 both use `clientId` and `clientSecret`, but the values come
+from fundamentally different client registries. This distinction matters when
+multiple applications (e.g., goose-agent-chat and agent-credential-broker)
+need to connect to the same MCP server.
+
+### UAA / Tanzu SSO (Method 1) — Per-App Client Registration
+
+Each Cloud Foundry application bound to a `p-identity` service instance
+receives its **own** client registration with a unique App ID and App Secret.
+The redirect URI allowlist is scoped to that specific client.
+
+```
+p-identity service instance (agent-sso)
+├── goose-agent-chat
+│   ├── App ID:     c7b38889-60af-4494-...
+│   ├── App Secret: ••••••••
+│   └── Redirect URIs: https://goose-agent-chat.apps.example.com/oauth/callback
+├── agent-credential-broker
+│   ├── App ID:     a1b2c3d4-e5f6-7890-...
+│   ├── App Secret: ••••••••
+│   └── Redirect URIs: https://agent-credential-broker.apps.example.com/oauth/callback
+└── cf-auth-mcp (resource server — validates tokens, does not initiate OAuth)
+```
+
+Each application must set `CF_MCP_OAUTH_CLIENT_ID` and
+`CF_MCP_OAUTH_CLIENT_SECRET` to **its own** App ID and App Secret. You cannot
+use goose-agent-chat's credentials from agent-credential-broker — UAA will
+reject the redirect URI because it doesn't match goose-agent-chat's allowlist.
+
+### GitHub / Provider-Hosted (Method 2) — Shared Global Registration
+
+GitHub OAuth Apps are registered once at github.com/settings/developers.
+A single OAuth App has one `client_id` and one `client_secret`, shared by
+every application that uses it. Multiple callback URLs can be added to the
+same OAuth App.
+
+```
+GitHub OAuth App (goose-agent-chat)
+├── Client ID:     Ov23liXXXXXXXXXXXXXX
+├── Client Secret: ••••••••
+└── Callback URLs:
+    ├── https://goose-agent-chat.apps.example.com/oauth/callback
+    └── https://agent-credential-broker.apps.example.com/oauth/callback
+```
+
+All applications use the **same** `GITHUB_OAUTH_CLIENT_ID` and
+`GITHUB_OAUTH_CLIENT_SECRET`. When a new application needs to connect, add
+its callback URL to the existing GitHub OAuth App — no new credentials
+are needed.
+
+### Summary
+
+| | UAA / Tanzu SSO | GitHub / Provider-Hosted |
+|---|---|---|
+| Client registry | Per-app (auto-provisioned by service binding) | Global (manually registered once) |
+| Client ID | Unique per application | Shared across applications |
+| Redirect URI scope | Tied to the specific App ID | Tied to the OAuth App (supports multiple URLs) |
+| Adding a new application | Bind to SSO, use the new App ID | Add callback URL to existing OAuth App |
+| Can share credentials? | No — each app must use its own | Yes — same credentials for all apps |
+
+---
+
 ## Choosing an Authentication Method
 
 ```
@@ -375,7 +557,10 @@ Do users need to authenticate as themselves?
 ├── Yes
 │   └── Does the MCP server implement RFC 9728
 │       (/.well-known/oauth-protected-resource)?
-│       ├── Yes → Method 1: OAuth 2.0 with RFC 9728 Discovery
+│       ├── Yes
+│       │   └── Does the auth server advertise a registration_endpoint?
+│       │       ├── Yes → Method 1b: OAuth 2.0 with DCR (zero config)
+│       │       └── No  → Method 1: OAuth 2.0 with RFC 9728 Discovery
 │       └── No  → Method 2: OAuth 2.0 with Provider-Specific Flow
 └── No
     └── Is the MCP server accessed through a gateway or service broker?
@@ -396,7 +581,7 @@ All authentication configuration lives in `.goose-config.yml` under the
 
 ```yaml
 mcpServers:
-  # Method 1: OAuth 2.0 with RFC 9728 Discovery
+  # Method 1: OAuth 2.0 with RFC 9728 Discovery (pre-registered client)
   - name: cloud-foundry
     type: streamable_http
     url: "https://cf-auth-mcp.apps.example.com/mcp"
@@ -404,6 +589,13 @@ mcpServers:
     clientId: ${CF_MCP_OAUTH_CLIENT_ID}
     clientSecret: ${CF_MCP_OAUTH_CLIENT_SECRET}
     scopes: "openid cloud_controller.read cloud_controller.write"
+
+  # Method 1b: OAuth 2.0 with RFC 9728 + DCR (zero config)
+  - name: jira
+    type: streamable_http
+    url: "https://mcp-gateway-jira-prod.apps.example.com/jira/mcp"
+    requiresAuth: true
+    scopes: "read:jira-work write:jira-work"
 
   # Method 2: OAuth 2.0 with Provider-Specific Flow
   - name: github

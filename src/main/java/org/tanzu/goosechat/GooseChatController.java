@@ -6,12 +6,20 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.tanzu.goose.cf.GooseExecutor;
 import org.tanzu.goose.cf.GooseExecutionException;
 import org.tanzu.goose.cf.GooseOptions;
+import org.tanzu.goose.cf.McpServerInfo;
+import org.tanzu.goose.cf.broker.BrokerCredentialInjector;
+import org.tanzu.goose.cf.broker.CredentialBrokerClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -57,7 +65,9 @@ public class GooseChatController {
     private static final String SESSION_PREFIX = "chat-";
     
     private final GooseExecutor executor;
-    private final GooseConfigInjector configInjector;
+    private final BrokerCredentialInjector brokerCredentialInjector;
+    private final CredentialBrokerClient brokerClient;
+    private final OAuth2AuthorizedClientService authorizedClientService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
     
@@ -69,10 +79,15 @@ public class GooseChatController {
         return t;
     });
 
-    public GooseChatController(GooseExecutor executor, GooseConfigInjector configInjector) {
+    public GooseChatController(GooseExecutor executor,
+                               @Autowired(required = false) BrokerCredentialInjector brokerCredentialInjector,
+                               @Autowired(required = false) CredentialBrokerClient brokerClient,
+                               @Autowired(required = false) OAuth2AuthorizedClientService authorizedClientService) {
         this.executor = executor;
-        this.configInjector = configInjector;
-        logger.info("GooseChatController initialized with Goose native session support");
+        this.brokerCredentialInjector = brokerCredentialInjector;
+        this.brokerClient = brokerClient;
+        this.authorizedClientService = authorizedClientService;
+        logger.info("GooseChatController initialized (broker integration: {})", brokerClient != null ? "enabled" : "disabled");
         
         // Schedule periodic session cleanup
         cleanupExecutor.scheduleAtFixedRate(this::cleanupExpiredSessions, 1, 1, TimeUnit.MINUTES);
@@ -120,6 +135,19 @@ public class GooseChatController {
                 System.currentTimeMillis()
             );
             
+            // Obtain a delegation token from the broker if available
+            if (brokerClient != null) {
+                try {
+                    String delegationToken = obtainDelegationToken();
+                    if (delegationToken != null) {
+                        session.setDelegationToken(delegationToken);
+                        logger.info("Obtained delegation token for session {}", sessionId);
+                    }
+                } catch (Exception e) {
+                    logger.warn("Failed to obtain delegation token for session {} — broker credentials will be unavailable", sessionId, e);
+                }
+            }
+
             sessions.put(sessionId, session);
             
             logger.info("Created conversation session: {} with provider: {}", sessionId, provider);
@@ -209,8 +237,16 @@ public class GooseChatController {
                 // Priority: 1. GenAI service (if available), 2. Session config, 3. Environment
                 GooseOptions options = buildGooseOptions(session);
 
-                // Inject OAuth tokens for authenticated MCP servers before execution
-                configInjector.injectOAuthTokens(sessionId);
+                // Inject credentials via the broker
+                if (brokerCredentialInjector != null && session.getDelegationToken() != null) {
+                    var result = brokerCredentialInjector.injectCredentials(session.getDelegationToken());
+
+                    for (String system : result.delegationRequired()) {
+                        emitter.send(SseEmitter.event()
+                                .name("delegation_required")
+                                .data("{\"targetSystem\":\"" + system + "\"}"));
+                    }
+                }
 
                 // Execute Goose with streaming JSON output for token-level streaming
                 boolean isFirstMessage = session.messageCount() == 0;
@@ -643,6 +679,49 @@ public class GooseChatController {
     }
 
     /**
+     * Obtain a delegation token from the broker using the current user's UAA access token.
+     * The access token (a JWT on the uaa plan) is validated by the broker via the shared
+     * UAA JWKS endpoint (same p-identity SSO instance).
+     */
+    private String obtainDelegationToken() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (!(auth instanceof OAuth2AuthenticationToken oauthToken)) {
+            logger.warn("Cannot obtain delegation token: authentication is not OAuth2");
+            return null;
+        }
+
+        if (authorizedClientService == null) {
+            logger.warn("Cannot obtain delegation token: no OAuth2AuthorizedClientService");
+            return null;
+        }
+
+        OAuth2AuthorizedClient authorizedClient = authorizedClientService.loadAuthorizedClient(
+                oauthToken.getAuthorizedClientRegistrationId(), oauthToken.getName());
+
+        if (authorizedClient == null || authorizedClient.getAccessToken() == null) {
+            logger.warn("Cannot obtain delegation token: no authorized client or access token");
+            return null;
+        }
+
+        String accessToken = authorizedClient.getAccessToken().getTokenValue();
+
+        List<String> allowedSystems = executor.getConfiguration().mcpServers().stream()
+                .filter(McpServerInfo::requiresAuth)
+                .map(McpServerInfo::name)
+                .toList();
+
+        if (allowedSystems.isEmpty()) {
+            logger.debug("No MCP servers require auth — skipping delegation token creation");
+            return null;
+        }
+
+        var delegationResponse = brokerClient.createDelegation(
+                accessToken, "goose-agent-chat", allowedSystems, Duration.ofMinutes(30));
+
+        return delegationResponse.token();
+    }
+
+    /**
      * Clean up expired sessions.
      */
     private void cleanupExpiredSessions() {
@@ -711,6 +790,7 @@ public class GooseChatController {
         private final Duration inactivityTimeout;
         private volatile long lastActivity;
         private volatile int messageCount;
+        private volatile String delegationToken;
 
         ConversationSession(String provider, String model, 
                            Duration inactivityTimeout, long createdAt) {
@@ -726,6 +806,8 @@ public class GooseChatController {
         Duration inactivityTimeout() { return inactivityTimeout; }
         long lastActivity() { return lastActivity; }
         int messageCount() { return messageCount; }
+        String getDelegationToken() { return delegationToken; }
+        void setDelegationToken(String token) { this.delegationToken = token; }
         
         void updateLastActivity() { 
             this.lastActivity = System.currentTimeMillis(); 

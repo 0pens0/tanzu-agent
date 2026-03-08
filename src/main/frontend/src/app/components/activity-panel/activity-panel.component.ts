@@ -37,6 +37,10 @@ export class ActivityPanelComponent {
   completedActivities = computed(() => 
     this.activities().filter(a => a.status === 'completed' || a.status === 'info')
   );
+
+  actionRequiredActivities = computed(() =>
+    this.activities().filter(a => a.status === 'action_required')
+  );
   
   hasActivities = computed(() => this.activities().length > 0);
 
@@ -45,6 +49,9 @@ export class ActivityPanelComponent {
   }
 
   getActivityIcon(activity: ActivityEvent): string {
+    if (activity.type === 'delegation_required') {
+      return 'warning';
+    }
     if (activity.type === 'notification') {
       return 'info';
     }
@@ -52,11 +59,15 @@ export class ActivityPanelComponent {
     switch (activity.status) {
       case 'running': return 'pending';
       case 'error': return 'error';
+      case 'action_required': return 'warning';
       default: return 'check_circle';
     }
   }
 
   getActivityTitle(activity: ActivityEvent): string {
+    if (activity.type === 'delegation_required') {
+      return `Authorization Required: ${activity.targetSystem}`;
+    }
     if (activity.type === 'notification') {
       return activity.extensionId || 'Notification';
     }
