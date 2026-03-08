@@ -11,7 +11,9 @@ applications:
     env:
       JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 21.+ } }'
       GOOSE_ENABLED: true
-      # GOOSE_VERSION: 1.27.1
+      # GOOSE_VERSION: 1.27.2
+      # Agent Credential Broker URL (enables broker-based credential acquisition)
+      BROKER_BASE_URL: ((BROKER_BASE_URL))
       # Provider/model configuration is in .goose-config.yml (src/main/resources)
       # API key for the configured provider (set via CredHub or cf set-env):
       # OPENAI_API_KEY: ((OPENAI_API_KEY))
