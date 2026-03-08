@@ -25,12 +25,10 @@ export class ConfigPanelComponent implements OnInit {
   private _config = signal<GooseConfig | null>(null);
   private _loading = signal<boolean>(true);
   private _error = signal<string | null>(null);
-  private _connectingServer = signal<string | null>(null);
   
   readonly config = this._config.asReadonly();
   readonly loading = this._loading.asReadonly();
   readonly error = this._error.asReadonly();
-  readonly connectingServer = this._connectingServer.asReadonly();
   
   readonly skills = computed(() => this._config()?.skills ?? []);
   readonly mcpServers = computed(() => this._config()?.mcpServers ?? []);
@@ -89,11 +87,9 @@ export class ConfigPanelComponent implements OnInit {
   }
 
   getSkillTooltip(skill: SkillInfo): string {
-    // Prioritize description for tooltip
     if (skill.description) {
       return skill.description;
     }
-    // Fall back to source info if no description
     if (skill.repository) {
       return `${skill.repository}${skill.branch ? ` (${skill.branch})` : ''}${skill.path ? ` → ${skill.path}` : ''}`;
     }
@@ -121,7 +117,6 @@ export class ConfigPanelComponent implements OnInit {
 
   getMcpServerDetail(server: McpServerInfo): string {
     if (server.url) {
-      // Show just the host for HTTP servers
       try {
         const url = new URL(server.url);
         return url.host;
@@ -135,79 +130,11 @@ export class ConfigPanelComponent implements OnInit {
     return '';
   }
 
-  /**
-   * Check if a server requires OAuth authentication.
-   */
   requiresAuth(server: McpServerInfo): boolean {
     return server.requiresAuth === true;
   }
 
-  /**
-   * Check if a server is currently authenticated.
-   */
-  isAuthenticated(server: McpServerInfo): boolean {
-    return this.oauthService.isAuthenticated(server.name);
-  }
-
-  /**
-   * Check if a server is currently in the process of connecting.
-   */
-  isConnecting(server: McpServerInfo): boolean {
-    return this._connectingServer() === server.name;
-  }
-
-  /**
-   * Initiate OAuth connection for a server.
-   * In broker mode, opens the broker UI instead of an inline OAuth popup.
-   */
-  async connectServer(server: McpServerInfo): Promise<void> {
-    if (this.isBrokerMode()) {
-      this.oauthService.openBrokerGrants();
-      return;
-    }
-
-    const session = this.chatService.getCurrentSession();
-    if (!session) {
-      console.warn('No active session for OAuth');
-      return;
-    }
-
-    this._connectingServer.set(server.name);
-    
-    try {
-      const success = await this.oauthService.initiateAuth(server.name, session.sessionId);
-      if (success) {
-        console.log(`Successfully connected to ${server.name}`);
-      } else {
-        console.warn(`Failed to connect to ${server.name}`);
-      }
-    } catch (e) {
-      console.error(`Error connecting to ${server.name}:`, e);
-    } finally {
-      this._connectingServer.set(null);
-    }
-  }
-
-  /**
-   * Disconnect from a server.
-   * In broker mode, opens the broker UI for grant management.
-   */
-  async disconnectServer(server: McpServerInfo): Promise<void> {
-    if (this.isBrokerMode()) {
-      this.oauthService.openBrokerGrants();
-      return;
-    }
-
-    const session = this.chatService.getCurrentSession();
-    if (!session) {
-      return;
-    }
-
-    try {
-      await this.oauthService.disconnect(server.name, session.sessionId);
-      console.log(`Disconnected from ${server.name}`);
-    } catch (e) {
-      console.error(`Error disconnecting from ${server.name}:`, e);
-    }
+  openBrokerGrants(): void {
+    this.oauthService.openBrokerGrants();
   }
 }

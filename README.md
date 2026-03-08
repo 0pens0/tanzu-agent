@@ -2,7 +2,7 @@
 
 A full-stack web application providing a chat interface for interacting with [Goose AI agent](https://github.com/block/goose). Built with Spring Boot and Angular, featuring real-time streaming responses and Material Design 3 UI.
 
-> **📘 [Getting Started Guide](GETTING-STARTED.md)** — Learn how to configure LLM providers, add MCP servers, set up skills, and deploy to Cloud Foundry with Tanzu Marketplace integration.
+> **[Getting Started Guide](GETTING-STARTED.md)** — Learn how to configure LLM providers, add MCP servers, set up skills, and deploy to Cloud Foundry with Tanzu Marketplace integration.
 
 ## Features
 
@@ -10,7 +10,7 @@ A full-stack web application providing a chat interface for interacting with [Go
 - **Real-time Streaming**: SSE-based streaming of responses
 - **Material Design 3**: Modern, responsive UI using Angular Material
 - **Multi-Provider Support**: Works with Anthropic, OpenAI, Google, Databricks, and Ollama
-- **MCP OAuth2 Authentication**: Connect to OAuth-protected MCP servers with user consent flow
+- **Agent Credential Broker**: Centralized credential management for OAuth-protected MCP servers via delegation tokens
 - **Authentication**: Tanzu SSO (p-identity) single sign-on via OAuth2
 - **Cloud Foundry Ready**: Deployable with the Goose buildpack
 
@@ -71,7 +71,7 @@ The Angular dev server runs on http://localhost:4200 and proxies API requests to
 ### 1. Create vars.yaml
 
 ```yaml
-ANTHROPIC_API_KEY: your-api-key
+BROKER_BASE_URL: https://agent-credential-broker.apps.example.com
 ```
 
 ### 2. Deploy
@@ -97,7 +97,7 @@ cf push --vars-file vars.yaml
 │  │  │  Angular SPA        │      │  REST Controllers                  │ │ │
 │  │  │  /static/*          │─────▶│  GooseChatController               │ │ │
 │  │  │  Material Design 3  │ HTTP │  ChatHealthController              │ │ │
-│  │  │                     │      │  DiagnosticsController             │ │ │
+│  │  │                     │      │  BrokerStatusController            │ │ │
 │  │  └─────────────────────┘      └────────────────────────────────────┘ │ │
 │  │                                          │                            │ │
 │  │                                          ▼                            │ │
@@ -105,7 +105,8 @@ cf push --vars-file vars.yaml
 │  │                               │  GooseExecutor         │              │ │
 │  │                               │  (goose-cf-wrapper)    │              │ │
 │  │                               │  - Session management  │              │ │
-│  │                               │  - ProcessBuilder      │              │ │
+│  │                               │  - Broker credential   │              │ │
+│  │                               │    injection           │              │ │
 │  │                               └────────────────────────┘              │ │
 │  │                                          │                            │ │
 │  └──────────────────────────────────────────│────────────────────────────┘ │
@@ -116,14 +117,14 @@ cf push --vars-file vars.yaml
 │  │  Environment: GOOSE_CLI_PATH, provider config                         │ │
 │  └───────────────────────────────────────────────────────────────────────┘ │
 │                                                                            │
-└────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
-                        ┌─────────────────────────┐
-                        │   LLM Provider API      │
-                        │   (Anthropic, OpenAI,   │
-                        │    Google, Databricks)  │
-                        └─────────────────────────┘
+└──────────────────────┬─────────────────────────────┬──────────────────────┘
+                       │                             │
+                       ▼                             ▼
+         ┌─────────────────────────┐   ┌─────────────────────────┐
+         │   LLM Provider API      │   │ Agent Credential Broker  │
+         │   (Anthropic, OpenAI,   │   │ (delegation tokens,      │
+         │    Google, Databricks)  │   │  OAuth grants)           │
+         └─────────────────────────┘   └─────────────────────────┘
 ```
 
 ## API Endpoints
@@ -137,12 +138,9 @@ cf push --vars-file vars.yaml
 | `/api/chat/sessions/{id}/messages` | POST | Send message (returns SSE stream) |
 | `/api/chat/sessions/{id}/status` | GET | Check session status |
 | `/api/chat/sessions/{id}` | DELETE | Close a session |
+| `/api/broker/status` | GET | Check Agent Credential Broker configuration and availability |
+| `/api/config` | GET | View current Goose configuration (provider, MCP servers) |
 | `/api/diagnostics/env` | GET | View relevant environment variables |
-| `/oauth/initiate/{serverName}` | POST | Initiate OAuth flow for an MCP server |
-| `/oauth/callback` | GET | OAuth callback handler |
-| `/oauth/status/{serverName}` | GET | Check OAuth authentication status |
-| `/oauth/disconnect/{serverName}` | POST | Revoke OAuth tokens for an MCP server |
-| `/oauth/client-metadata.json` | GET | Client ID Metadata Document for dynamic registration |
 
 ## Authentication
 
@@ -156,19 +154,41 @@ All requests require authentication via Tanzu SSO (`p-identity` service binding)
 
 ### Setting up SSO on Cloud Foundry
 
-The app requires a `p-identity` service instance bound as `goose-sso` in `manifest.yml`.
+The app requires a `p-identity` service instance bound as `agent-sso` in `manifest.yml`. This should be the same SSO instance used by the Agent Credential Broker, so that user identities are consistent across both apps.
 
 ```bash
 # Create an SSO service instance (plan name may vary by foundation)
-cf create-service p-identity <plan> goose-sso
+cf create-service p-identity <plan> agent-sso
 
-# Deploy (manifest.yml already declares the goose-sso service binding)
+# Deploy (manifest.yml already declares the agent-sso service binding)
 cf push --vars-file vars.yaml
 ```
 
 ### Local development
 
 For local development without a `p-identity` binding, configure a Spring Security OAuth2 client registration manually in `application.properties` or use a local OAuth2 provider.
+
+## Credential Management
+
+OAuth credentials for MCP servers (GitHub, Cloud Foundry, etc.) are managed by the [Agent Credential Broker](../agent-credential-broker/), a standalone service that centralizes credential acquisition and delegation.
+
+### How it works
+
+1. A user pre-authorizes target systems (e.g., GitHub) in the Credential Broker's UI
+2. At session creation, goose-agent-chat obtains a **delegation token** from the broker using the user's UAA access token
+3. Before each Goose execution, the delegation token is used to request short-lived **resource access tokens** from the broker
+4. These tokens are injected into Goose's `config.yaml` as `Authorization` headers for each MCP server
+
+### Configuration
+
+Set the `BROKER_BASE_URL` environment variable to enable broker integration:
+
+```yaml
+# manifest.yml or vars.yaml
+BROKER_BASE_URL: https://agent-credential-broker.apps.example.com
+```
+
+MCP servers that require authentication should have `requiresAuth: true` in `.goose-config.yml`. No `clientId`, `clientSecret`, or `scopes` are needed — those are managed by the broker.
 
 ## Configuration
 
@@ -177,12 +197,14 @@ For local development without a `p-identity` binding, configure a Spring Securit
 | Property | Default | Description |
 |----------|---------|-------------|
 | `goose.enabled` | `true` | Enable/disable Goose integration |
+| `broker.base-url` | | Agent Credential Broker URL (enables broker integration) |
 
 ### Environment Variables
 
 | Variable | Description |
 |----------|-------------|
 | `GOOSE_CLI_PATH` | Path to Goose CLI binary |
+| `BROKER_BASE_URL` | Agent Credential Broker URL |
 | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `OPENAI_API_KEY` | OpenAI API key |
 | `GOOGLE_API_KEY` | Google AI API key |
@@ -194,4 +216,3 @@ For local development without a `p-identity` binding, configure a Spring Securit
 ## License
 
 MIT License
-

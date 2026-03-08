@@ -1,13 +1,13 @@
 # Getting Started with Goose Agent Chat
 
-This guide walks you through customizing Goose Agent Chat for your environment. You'll learn how to configure LLM providers, add MCP servers for extended capabilities, and set up skills for reusable workflows.
+This guide walks you through customizing Goose Agent Chat for your environment. You'll learn how to configure LLM providers, add MCP servers, set up credential management via the Agent Credential Broker, and deploy to Cloud Foundry.
 
 ## Table of Contents
 
 - [Configuration Overview](#configuration-overview)
 - [Configuring LLM Providers](#configuring-llm-providers)
 - [Adding MCP Servers](#adding-mcp-servers)
-- [OAuth2-Protected MCP Servers](#oauth2-protected-mcp-servers)
+- [Credential Management with the Agent Credential Broker](#credential-management-with-the-agent-credential-broker)
 - [Configuring Skills](#configuring-skills)
 - [Building and Deploying](#building-and-deploying)
 - [Cloud Foundry Deployment](#cloud-foundry-deployment)
@@ -95,16 +95,20 @@ Remote MCP servers are ideal for Cloud Foundry deployments since they don't requ
 ```yaml
 # .goose-config.yml
 mcpServers:
-  # Cloud Foundry MCP server for CF operations
+  # Cloud Foundry MCP server - credentials managed by Agent Credential Broker
   - name: cloud-foundry
     type: streamable_http
     url: "https://cloud-foundry-mcp-server.apps.example.com/mcp"
+    requiresAuth: true
 
-  # GitHub MCP server for repository operations
+  # GitHub MCP server - credentials managed by Agent Credential Broker
   - name: github
     type: streamable_http
-    url: "https://github-mcp-server.apps.example.com/mcp"
+    url: "https://api.githubcopilot.com/mcp/"
+    requiresAuth: true
 ```
+
+For servers that require authentication, set `requiresAuth: true`. No `clientId`, `clientSecret`, or `scopes` are needed in the app configuration — credential management is handled by the [Agent Credential Broker](#credential-management-with-the-agent-credential-broker).
 
 ### Adding Local MCP Servers
 
@@ -122,138 +126,85 @@ mcpServers:
       - "@modelcontextprotocol/server-filesystem"
     env:
       ALLOWED_DIRECTORIES: "/home/vcap/app,/tmp"
-
-  # GitHub access via stdio (requires Node.js + token)
-  - name: github
-    type: stdio
-    command: npx
-    args:
-      - "-y"
-      - "@modelcontextprotocol/server-github"
-    env:
-      GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_TOKEN}
 ```
 
 > **Note:** For Cloud Foundry deployments, prefer `streamable_http` servers since `stdio` servers may require additional runtimes (Node.js, Python) that aren't included in the standard Java buildpack.
 
 ---
 
-## OAuth2-Protected MCP Servers
+## Credential Management with the Agent Credential Broker
 
-Some MCP servers require user authentication via OAuth2. Goose Agent Chat supports the [MCP Authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization) with OAuth 2.1 and PKCE.
+OAuth credentials for MCP servers (GitHub, Cloud Foundry, etc.) are managed centrally by the [Agent Credential Broker](../agent-credential-broker/), a standalone service that handles credential acquisition and delegation.
 
 ### How It Works
 
-1. **Discovery**: When you add an MCP server with `requiresAuth: true`, the application discovers OAuth endpoints automatically
-2. **User Consent**: Users see an "OAuth Connect" button in the UI for protected servers
-3. **Authorization**: Users are redirected to the authorization server (e.g., GitHub) to grant access
-4. **Token Management**: Tokens are stored server-side and automatically refreshed
+1. **User grants access** — A user pre-authorizes target systems (e.g., GitHub, Cloud Foundry) in the Credential Broker's web UI
+2. **Delegation token** — At session creation, goose-agent-chat obtains a signed delegation token from the broker, using the user's UAA access token for authentication
+3. **Credential injection** — Before each Goose execution, the delegation token is exchanged for short-lived access tokens for each MCP server
+4. **Transparent auth** — Access tokens are injected as `Authorization` headers into Goose's `config.yaml`, so MCP servers receive authenticated requests
 
-### Configuration Options
+### Prerequisites
 
-| Field | Description | Required |
-|-------|-------------|----------|
-| `requiresAuth` | Enable OAuth2 authentication | Yes |
-| `clientId` | Pre-registered OAuth client ID | For servers without dynamic registration |
-| `clientSecret` | OAuth client secret | For confidential clients |
-| `scopes` | Space-separated OAuth scopes | Optional (auto-discovered if not set) |
+- The Agent Credential Broker must be deployed and accessible
+- Both goose-agent-chat and the broker must share the same `p-identity` SSO service instance (`agent-sso`), so user identities are consistent
+- The user must have active grants in the broker for the target systems they want to use
 
-### Example: GitHub MCP Server
+### Configuration
 
-GitHub's remote MCP server requires OAuth authentication:
-
-#### Step 1: Create a GitHub OAuth App
-
-1. Go to https://github.com/settings/developers
-2. Click "New OAuth App"
-3. Set the callback URL to: `https://your-app.apps.example.com/oauth/callback`
-4. Note the Client ID and generate a Client Secret
-
-#### Step 2: Configure the MCP Server
+Set the `BROKER_BASE_URL` environment variable to point to the deployed broker:
 
 ```yaml
-# .goose-config.yml
+# vars.yaml
+BROKER_BASE_URL: https://agent-credential-broker.apps.example.com
+```
+
+This is the only configuration needed in goose-agent-chat. The broker manages all OAuth client registrations, token storage, and refresh logic.
+
+### MCP Server Configuration
+
+MCP servers that require authentication should have `requiresAuth: true` in `.goose-config.yml`:
+
+```yaml
 mcpServers:
   - name: github
     type: streamable_http
     url: "https://api.githubcopilot.com/mcp/"
     requiresAuth: true
-    clientId: ${GITHUB_OAUTH_CLIENT_ID}
-    clientSecret: ${GITHUB_OAUTH_CLIENT_SECRET}
-    scopes: "repo read:org user:email"
 ```
 
-#### Step 3: Set Environment Variables
+No `clientId`, `clientSecret`, or `scopes` fields are needed — the broker handles those details.
 
-Add to your `vars.yaml`:
+### Verifying Broker Connectivity
 
-```yaml
-GITHUB_OAUTH_CLIENT_ID: Iv1.xxxxxxxxxxxxxxxx
-GITHUB_OAUTH_CLIENT_SECRET: your-client-secret-here
-```
-
-#### Step 4: Deploy and Connect
+After deployment, verify the broker connection:
 
 ```bash
-mvn clean package && cf push --vars-file vars.yaml
+curl https://goose-agent-chat.apps.example.com/api/broker/status
 ```
 
-After deployment, the GitHub MCP server will show an "OAuth Connect" button. Click it to authorize access.
+Expected response when properly configured:
 
-### OAuth Scopes
-
-Scopes determine what permissions the OAuth token has. The application selects scopes in this priority order:
-
-1. **Explicit configuration** - `scopes` field in `.goose-config.yml` (recommended)
-2. **WWW-Authenticate header** - Scopes from the server's 401 response
-3. **Protected Resource Metadata** - From RFC 9728 discovery
-4. **Authorization Server Metadata** - From RFC 8414 discovery (broadest)
-
-For GitHub, common scopes include:
-
-| Scope | Access |
-|-------|--------|
-| `repo` | Full access to repositories (issues, PRs, code) |
-| `public_repo` | Access to public repositories only |
-| `read:org` | Read organization membership |
-| `user:email` | Read user email addresses |
-
-### Servers with Dynamic Client Registration
-
-For MCP servers that support RFC 7591 Dynamic Client Registration, you don't need `clientId` or `clientSecret`:
-
-```yaml
-mcpServers:
-  - name: my-mcp-server
-    type: streamable_http
-    url: "https://mcp-server.example.com/mcp"
-    requiresAuth: true
-    # Uses dynamic registration - no credentials needed
+```json
+{
+  "configured": true,
+  "baseUrl": "https://agent-credential-broker.apps.example.com"
+}
 ```
 
-The application automatically uses a Client ID Metadata Document as the client identifier.
+### Troubleshooting
 
-### Troubleshooting OAuth
+#### MCP servers show as enabled but have no tools
 
-#### "403 Forbidden" after authentication
+The user likely hasn't granted access to the target system in the broker. Direct them to the broker UI to create grants.
 
-Your token doesn't have the required scopes. Add explicit scopes to your configuration:
+#### "Extension not recognized" or authentication failures
 
-```yaml
-scopes: "repo read:org user:email"
-```
+Check `cf logs goose-agent-chat --recent` for broker-related errors. Common causes:
 
-Then disconnect and reconnect to get a new token with the correct permissions.
-
-#### "Invalid or expired state parameter"
-
-The OAuth session expired. Try initiating the flow again by clicking "OAuth Connect".
-
-#### OAuth server returns 404
-
-The server may not support dynamic client registration. You need to:
-1. Register an OAuth application with the provider
-2. Add `clientId` and `clientSecret` to your configuration
+- `BROKER_BASE_URL` not set or pointing to an incorrect URL
+- The broker is down or unreachable
+- The user's delegation token has expired (tokens are re-acquired per session)
+- The SSO service instance differs between goose-agent-chat and the broker
 
 ---
 
@@ -444,14 +395,16 @@ applications:
     buildpacks:
       - https://github.com/cpage-pivotal/goose-buildpack
       - java_buildpack_offline
+    services:
+      - agent-sso
     env:
       JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 21.+ } }'
       GOOSE_ENABLED: true
+      BROKER_BASE_URL: ((BROKER_BASE_URL))
       
       # API key for your provider (use CredHub for production)
-      ANTHROPIC_API_KEY: ((ANTHROPIC_API_KEY))
+      # ANTHROPIC_API_KEY: ((ANTHROPIC_API_KEY))
       # OPENAI_API_KEY: ((OPENAI_API_KEY))
-      # GOOGLE_API_KEY: ((GOOGLE_API_KEY))
 ```
 
 ### Using vars.yaml for Secrets
@@ -459,8 +412,8 @@ applications:
 For local deployments, create a `vars.yaml` file (excluded from git):
 
 ```yaml
+BROKER_BASE_URL: https://agent-credential-broker.apps.example.com
 ANTHROPIC_API_KEY: sk-ant-xxxxx
-OPENAI_API_KEY: sk-xxxxx
 ```
 
 Deploy with:
@@ -475,6 +428,7 @@ cf push --vars-file vars.yaml
 |----------|-------------|
 | `GOOSE_ENABLED` | Enable Goose CLI integration |
 | `GOOSE_CLI_PATH` | Path to Goose binary (set by buildpack) |
+| `BROKER_BASE_URL` | Agent Credential Broker URL (enables broker integration) |
 | `GOOSE_PROVIDER` | Override default provider |
 | `GOOSE_MODEL` | Override default model |
 | `GOOSE_TIMEOUT_MINUTES` | Execution timeout (default: 5) |
@@ -585,35 +539,31 @@ skills:
       - [ ] Follows project style guide
 
 # MCP Servers for extended capabilities
+# Credentials managed by Agent Credential Broker (set BROKER_BASE_URL)
 mcpServers:
-  # Public MCP server (no authentication)
-  - name: cloud-foundry
-    type: streamable_http
-    url: "https://cloud-foundry-mcp-server.apps.example.com/mcp"
-
-  # OAuth-protected MCP server (GitHub)
+  # GitHub MCP server
   - name: github
     type: streamable_http
     url: "https://api.githubcopilot.com/mcp/"
     requiresAuth: true
-    clientId: ${GITHUB_OAUTH_CLIENT_ID}
-    clientSecret: ${GITHUB_OAUTH_CLIENT_SECRET}
-    scopes: "repo read:org user:email"
+
+  # Cloud Foundry MCP server
+  - name: cloud-foundry
+    type: streamable_http
+    url: "https://cloud-foundry-mcp-server.apps.example.com/mcp"
+    requiresAuth: true
   
-  # MCP server with dynamic client registration
+  # Public MCP server (no authentication needed)
   - name: internal-tools
     type: streamable_http
     url: "https://internal-mcp.apps.example.com/mcp"
-    requiresAuth: true
-    # No clientId/clientSecret - uses dynamic registration
 ```
 
 And the corresponding `vars.yaml` for secrets:
 
 ```yaml
+BROKER_BASE_URL: https://agent-credential-broker.apps.example.com
 ANTHROPIC_API_KEY: sk-ant-xxxxx
-GITHUB_OAUTH_CLIENT_ID: Iv1.xxxxxxxxxxxxxxxx
-GITHUB_OAUTH_CLIENT_SECRET: your-client-secret-here
 ```
 
 ---
@@ -623,3 +573,4 @@ GITHUB_OAUTH_CLIENT_SECRET: your-client-secret-here
 - Review the [Goose Documentation](https://block.github.io/goose/) for advanced configuration options
 - Explore the [MCP Server Registry](https://github.com/modelcontextprotocol/servers) for available servers
 - Check the [Goose Skills Guide](https://block.github.io/goose/docs/guides/context-engineering/using-skills) for creating custom skills
+- Set up the [Agent Credential Broker](../agent-credential-broker/) for centralized credential management

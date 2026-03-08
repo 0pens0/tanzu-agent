@@ -65,7 +65,6 @@ public class GooseChatController {
     private static final String SESSION_PREFIX = "chat-";
     
     private final GooseExecutor executor;
-    private final GooseConfigInjector configInjector;
     private final BrokerCredentialInjector brokerCredentialInjector;
     private final CredentialBrokerClient brokerClient;
     private final OAuth2AuthorizedClientService authorizedClientService;
@@ -81,12 +80,10 @@ public class GooseChatController {
     });
 
     public GooseChatController(GooseExecutor executor,
-                               GooseConfigInjector configInjector,
                                @Autowired(required = false) BrokerCredentialInjector brokerCredentialInjector,
                                @Autowired(required = false) CredentialBrokerClient brokerClient,
                                @Autowired(required = false) OAuth2AuthorizedClientService authorizedClientService) {
         this.executor = executor;
-        this.configInjector = configInjector;
         this.brokerCredentialInjector = brokerCredentialInjector;
         this.brokerClient = brokerClient;
         this.authorizedClientService = authorizedClientService;
@@ -240,19 +237,15 @@ public class GooseChatController {
                 // Priority: 1. GenAI service (if available), 2. Session config, 3. Environment
                 GooseOptions options = buildGooseOptions(session);
 
-                // Inject credentials: prefer broker, fall back to direct OAuth
-                List<String> delegationRequiredSystems = List.of();
+                // Inject credentials via the broker
                 if (brokerCredentialInjector != null && session.getDelegationToken() != null) {
                     var result = brokerCredentialInjector.injectCredentials(session.getDelegationToken());
-                    delegationRequiredSystems = result.delegationRequired();
 
-                    for (String system : delegationRequiredSystems) {
+                    for (String system : result.delegationRequired()) {
                         emitter.send(SseEmitter.event()
                                 .name("delegation_required")
                                 .data("{\"targetSystem\":\"" + system + "\"}"));
                     }
-                } else {
-                    configInjector.injectOAuthTokens(sessionId);
                 }
 
                 // Execute Goose with streaming JSON output for token-level streaming
