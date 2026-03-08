@@ -30,11 +30,10 @@ export interface CallbackResponse {
 /**
  * Service for managing OAuth authentication with MCP servers.
  * 
- * Handles:
- * - Checking authentication status
- * - Initiating OAuth flows (opens popup for authorization)
- * - Processing OAuth callbacks
- * - Disconnecting (revoking tokens)
+ * Supports two modes:
+ * - **Broker mode**: when broker.base-url is configured, links to the broker UI
+ *   for grant management and checks status via the broker API.
+ * - **Direct OAuth mode** (fallback): manages OAuth flows inline via popup.
  */
 @Injectable({
   providedIn: 'root'
@@ -49,6 +48,44 @@ export class McpOAuthService {
   // Track pending OAuth operations
   private _pendingAuth = signal<string | null>(null);
   readonly pendingAuth = this._pendingAuth.asReadonly();
+
+  // Broker URL (set when broker integration is enabled)
+  private _brokerUrl = signal<string | null>(null);
+  readonly brokerUrl = this._brokerUrl.asReadonly();
+
+  /**
+   * Check if the broker is configured and set the broker URL.
+   */
+  async checkBrokerConfig(): Promise<void> {
+    try {
+      const response = await fetch('/api/broker/status');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.brokerUrl) {
+          this._brokerUrl.set(data.brokerUrl);
+        }
+      }
+    } catch {
+      // Broker not configured — use direct OAuth mode
+    }
+  }
+
+  /**
+   * Whether broker integration is active.
+   */
+  get isBrokerMode(): boolean {
+    return this._brokerUrl() !== null;
+  }
+
+  /**
+   * Open the broker UI grants page in a new tab.
+   */
+  openBrokerGrants(): void {
+    const url = this._brokerUrl();
+    if (url) {
+      window.open(url + '/grants', '_blank');
+    }
+  }
 
   /**
    * Check if a session is authenticated with an MCP server.

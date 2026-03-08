@@ -6,20 +6,26 @@ import org.springframework.stereotype.Component;
 import org.tanzu.goose.cf.GooseConfiguration;
 import org.tanzu.goose.cf.GooseExecutor;
 import org.tanzu.goose.cf.McpServerInfo;
+import org.tanzu.goose.cf.broker.CredentialBrokerClient;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Service to inject OAuth tokens into Goose configuration before execution.
+ * Service to inject credentials into Goose configuration before execution.
  * <p>
- * This component modifies the config.yaml file to include Authorization headers
- * for MCP servers that the user has authenticated with.
+ * Supports two credential sources:
+ * <ul>
+ *   <li>Agent Credential Broker (preferred) — uses delegation tokens</li>
+ *   <li>Direct OAuth via McpOAuthController (fallback during migration)</li>
+ * </ul>
  * </p>
  */
 @Component
@@ -90,6 +96,149 @@ public class GooseConfigInjector {
         } catch (IOException e) {
             logger.error("Failed to inject OAuth tokens into config", e);
         }
+    }
+
+    /**
+     * Inject credentials from the Agent Credential Broker for authenticated MCP servers.
+     *
+     * @param sessionId       the user's session ID
+     * @param delegationToken the session's delegation token (signed JWT)
+     * @param brokerClient    the broker client
+     * @return list of target system names that require user delegation (not pre-authorized)
+     */
+    public List<String> injectBrokerCredentials(String sessionId, String delegationToken,
+                                                CredentialBrokerClient brokerClient) {
+        logger.debug("injectBrokerCredentials called for sessionId={}", sessionId);
+        List<String> delegationRequired = new ArrayList<>();
+
+        try {
+            GooseConfiguration config = executor.getConfiguration();
+            Path configPath = findConfigPath();
+
+            if (configPath == null || !Files.exists(configPath)) {
+                logger.warn("Config file not found, cannot inject broker credentials");
+                return delegationRequired;
+            }
+
+            String configContent = Files.readString(configPath);
+            boolean modified = false;
+
+            brokerClient.setDelegationToken(delegationToken);
+
+            for (McpServerInfo server : config.mcpServers()) {
+                if (!server.requiresAuth()) {
+                    continue;
+                }
+
+                try {
+                    var response = brokerClient.requestAccess(
+                            server.name(),
+                            server.hasConfiguredScopes() ? server.scopes() : null);
+
+                    if (response instanceof CredentialBrokerClient.ResourceAccessToken token) {
+                        logger.info("Broker returned credential for server {} (header: {})",
+                                server.name(), token.headerName());
+                        configContent = injectHeader(configContent, server.name(),
+                                token.headerName(), token.headerValue());
+                        modified = true;
+                    } else if (response instanceof CredentialBrokerClient.UserDelegationRequired req) {
+                        logger.info("Broker requires user delegation for server {}: {}",
+                                server.name(), req.brokerAuthorizationUrl());
+                        delegationRequired.add(req.targetSystem());
+                    }
+                } catch (Exception e) {
+                    logger.warn("Broker credential request failed for server {} — skipping", server.name(), e);
+                }
+            }
+
+            if (modified) {
+                Files.writeString(configPath, configContent);
+                lastInjectionTime.put(sessionId, System.currentTimeMillis());
+                logger.info("Updated config.yaml with broker credentials for session {}", sessionId);
+            }
+
+        } catch (IOException e) {
+            logger.error("Failed to inject broker credentials into config", e);
+        }
+
+        return delegationRequired;
+    }
+
+    /**
+     * Inject a header (any name/value) for a specific server in the config.
+     * Generalizes {@link #injectAuthorizationHeader} to support non-Authorization headers
+     * (e.g., x-api-key for user-provided tokens).
+     */
+    private String injectHeader(String configContent, String serverName,
+                                String headerName, String headerValue) {
+        String[] lines = configContent.split("\n");
+        StringBuilder result = new StringBuilder();
+
+        boolean inTargetServer = false;
+        boolean foundHeaders = false;
+        boolean injectedHeader = false;
+        int serverIndent = -1;
+
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            String trimmed = line.trim();
+            int currentIndent = line.length() - line.stripLeading().length();
+
+            if (trimmed.equals(serverName + ":") && currentIndent == 2) {
+                inTargetServer = true;
+                serverIndent = currentIndent;
+                result.append(line).append("\n");
+                continue;
+            }
+
+            if (inTargetServer && currentIndent == serverIndent && !trimmed.isEmpty() && !trimmed.startsWith("#")) {
+                if (!injectedHeader) {
+                    result.append("    headers:\n");
+                    result.append("      ").append(headerName).append(": \"").append(headerValue).append("\"\n");
+                    injectedHeader = true;
+                }
+                inTargetServer = false;
+            }
+
+            if (inTargetServer) {
+                if (trimmed.equals("headers:") && currentIndent == 4) {
+                    foundHeaders = true;
+                    result.append(line).append("\n");
+
+                    boolean headerExists = false;
+                    for (int j = i + 1; j < lines.length; j++) {
+                        String nextLine = lines[j].trim();
+                        int nextIndent = lines[j].length() - lines[j].stripLeading().length();
+                        if (nextIndent <= 4 && !nextLine.isEmpty()) break;
+                        if (nextLine.startsWith(headerName + ":")) {
+                            headerExists = true;
+                            break;
+                        }
+                    }
+
+                    if (!headerExists) {
+                        result.append("      ").append(headerName).append(": \"").append(headerValue).append("\"\n");
+                        injectedHeader = true;
+                    }
+                    continue;
+                }
+
+                if (foundHeaders && trimmed.startsWith(headerName + ":") && currentIndent == 6) {
+                    result.append("      ").append(headerName).append(": \"").append(headerValue).append("\"\n");
+                    injectedHeader = true;
+                    continue;
+                }
+            }
+
+            result.append(line).append("\n");
+        }
+
+        if (inTargetServer && !injectedHeader) {
+            result.append("    headers:\n");
+            result.append("      ").append(headerName).append(": \"").append(headerValue).append("\"\n");
+        }
+
+        return result.toString();
     }
 
     /**

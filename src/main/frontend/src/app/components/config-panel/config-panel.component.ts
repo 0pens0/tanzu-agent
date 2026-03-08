@@ -38,6 +38,8 @@ export class ConfigPanelComponent implements OnInit {
   readonly hasMcpServers = computed(() => this.mcpServers().length > 0);
   readonly hasContent = computed(() => this.hasSkills() || this.hasMcpServers());
 
+  readonly isBrokerMode = computed(() => this.oauthService.isBrokerMode);
+
   constructor(
     private chatService: ChatService,
     private oauthService: McpOAuthService
@@ -45,6 +47,7 @@ export class ConfigPanelComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadConfig();
+    this.oauthService.checkBrokerConfig();
   }
 
   private async loadConfig(): Promise<void> {
@@ -155,8 +158,14 @@ export class ConfigPanelComponent implements OnInit {
 
   /**
    * Initiate OAuth connection for a server.
+   * In broker mode, opens the broker UI instead of an inline OAuth popup.
    */
   async connectServer(server: McpServerInfo): Promise<void> {
+    if (this.isBrokerMode()) {
+      this.oauthService.openBrokerGrants();
+      return;
+    }
+
     const session = this.chatService.getCurrentSession();
     if (!session) {
       console.warn('No active session for OAuth');
@@ -181,8 +190,14 @@ export class ConfigPanelComponent implements OnInit {
 
   /**
    * Disconnect from a server.
+   * In broker mode, opens the broker UI for grant management.
    */
   async disconnectServer(server: McpServerInfo): Promise<void> {
+    if (this.isBrokerMode()) {
+      this.oauthService.openBrokerGrants();
+      return;
+    }
+
     const session = this.chatService.getCurrentSession();
     if (!session) {
       return;

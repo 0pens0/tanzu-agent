@@ -28,12 +28,14 @@ export interface HealthInfo {
 export interface ActivityEvent {
   id: string;
   timestamp: Date;
-  type: 'tool_request' | 'tool_response' | 'notification';
+  type: 'tool_request' | 'tool_response' | 'notification' | 'delegation_required';
   toolName?: string;
   extensionId?: string;
   arguments?: Record<string, unknown>;
-  status: 'running' | 'completed' | 'error' | 'info';
+  status: 'running' | 'completed' | 'error' | 'info' | 'action_required';
   message?: string;
+  /** Target system that requires delegation (for delegation_required events) */
+  targetSystem?: string;
 }
 
 export interface TodoItem {
@@ -287,6 +289,25 @@ export class ChatService {
           this.activitySubject.next(activity);
         } catch (e) {
           console.warn('Failed to parse activity event:', event.data, e);
+        }
+      });
+
+      // Handle delegation_required events — user needs to authorize in the broker UI
+      eventSource.addEventListener('delegation_required', (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data);
+          const activity: ActivityEvent = {
+            id: `delegation-${data.targetSystem}-${Date.now()}`,
+            timestamp: new Date(),
+            type: 'delegation_required',
+            status: 'action_required',
+            targetSystem: data.targetSystem,
+            message: `Access to ${data.targetSystem} required. Authorize in the Credential Broker.`
+          };
+          this._activities.update(activities => [...activities, activity]);
+          this.activitySubject.next(activity);
+        } catch (e) {
+          console.warn('Failed to parse delegation_required event:', event.data, e);
         }
       });
 
