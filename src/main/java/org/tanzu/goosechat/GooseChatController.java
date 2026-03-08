@@ -7,6 +7,7 @@ import org.tanzu.goose.cf.GooseExecutor;
 import org.tanzu.goose.cf.GooseExecutionException;
 import org.tanzu.goose.cf.GooseOptions;
 import org.tanzu.goose.cf.McpServerInfo;
+import org.tanzu.goose.cf.broker.BrokerCredentialInjector;
 import org.tanzu.goose.cf.broker.CredentialBrokerClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,6 +66,7 @@ public class GooseChatController {
     
     private final GooseExecutor executor;
     private final GooseConfigInjector configInjector;
+    private final BrokerCredentialInjector brokerCredentialInjector;
     private final CredentialBrokerClient brokerClient;
     private final OAuth2AuthorizedClientService authorizedClientService;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -80,10 +82,12 @@ public class GooseChatController {
 
     public GooseChatController(GooseExecutor executor,
                                GooseConfigInjector configInjector,
+                               @Autowired(required = false) BrokerCredentialInjector brokerCredentialInjector,
                                @Autowired(required = false) CredentialBrokerClient brokerClient,
                                @Autowired(required = false) OAuth2AuthorizedClientService authorizedClientService) {
         this.executor = executor;
         this.configInjector = configInjector;
+        this.brokerCredentialInjector = brokerCredentialInjector;
         this.brokerClient = brokerClient;
         this.authorizedClientService = authorizedClientService;
         logger.info("GooseChatController initialized (broker integration: {})", brokerClient != null ? "enabled" : "disabled");
@@ -238,10 +242,10 @@ public class GooseChatController {
 
                 // Inject credentials: prefer broker, fall back to direct OAuth
                 List<String> delegationRequiredSystems = List.of();
-                if (brokerClient != null && session.getDelegationToken() != null) {
-                    delegationRequiredSystems = configInjector.injectBrokerCredentials(
-                            sessionId, session.getDelegationToken(), brokerClient);
-                    
+                if (brokerCredentialInjector != null && session.getDelegationToken() != null) {
+                    var result = brokerCredentialInjector.injectCredentials(session.getDelegationToken());
+                    delegationRequiredSystems = result.delegationRequired();
+
                     for (String system : delegationRequiredSystems) {
                         emitter.send(SseEmitter.event()
                                 .name("delegation_required")
