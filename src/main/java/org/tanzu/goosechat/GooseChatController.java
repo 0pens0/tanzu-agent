@@ -715,8 +715,7 @@ public class GooseChatController {
             return null;
         }
 
-        var delegationResponse = brokerClient.createDelegation(
-                accessToken, "goose-agent-chat", allowedSystems, Duration.ofMinutes(30));
+        var delegationResponse = brokerClient.createDelegation(accessToken, allowedSystems);
 
         return delegationResponse.token();
     }
