@@ -19,12 +19,17 @@ public class BrokerStatusController {
     @Value("${broker.base-url:}")
     private String brokerBaseUrl;
 
+    @Value("${broker.public-url:}")
+    private String brokerPublicUrl;
+
     @GetMapping("/api/broker/status")
     public Map<String, Object> getBrokerStatus() {
         boolean configured = brokerBaseUrl != null && !brokerBaseUrl.isBlank();
+        String urlForBrowser = (brokerPublicUrl != null && !brokerPublicUrl.isBlank())
+                ? brokerPublicUrl : brokerBaseUrl;
         return Map.of(
                 "configured", configured,
-                "brokerUrl", configured ? brokerBaseUrl : ""
+                "brokerUrl", configured ? urlForBrowser : ""
         );
     }
 }
