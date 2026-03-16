@@ -20,28 +20,3 @@ session:
   # Maximum turns before requiring user input (prevents runaway sessions)
   max_turns: 100
 
-env:
-  TANZU_HUB_URL: "${TANZU_HUB_URL}"
-  TANZU_HUB_USER: "${TANZU_HUB_USER}"
-  TANZU_HUB_PASSWORD: "${TANZU_HUB_PASSWORD}"
-
-skills:
-  - name: tanzu-hub
-    source: https://github.com/cpage-pivotal/hub-agent.git
-    branch: main
-    path: skills/tanzu-platform
-
-mcpServers:
-  # Cloud Foundry MCP Server - credentials managed by Agent Credential Broker
-  - name: cloud-foundry
-    type: streamable_http
-    url: "https://cf-auth-mcp.apps.tas-ndc.kuhn-labs.com/mcp"
-    requiresAuth: true
-  - name: hub
-    type: streamable_http
-    url: "https://hub-mcp.apps.tas-ndc.kuhn-labs.com/mcp"
-#  # GitHub MCP Server - credentials managed by Agent Credential Broker
-#  - name: github
-#    type: streamable_http
-#    url: "https://api.githubcopilot.com/mcp/"
-#    requiresAuth: true
