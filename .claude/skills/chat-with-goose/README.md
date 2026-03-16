@@ -4,22 +4,22 @@ This skill enables Claude Code to interact with the Goose Agent Chat application
 
 ## Files
 
-- `chat-with-goose.skill.md` - The skill definition that Claude Code uses
-- `goose-chat-helper.sh` - Helper script that handles authentication, session management, and messaging
+- `SKILL.md` - The skill definition that Claude Code uses
+- `goose-chat-helper.sh` - Helper script that handles SSO authentication, session management, and messaging
 - `README.md` - This file
 
 ## Usage
 
-Just ask Claude to chat with Goose and provide the password:
+Just ask Claude to chat with Goose and provide your SSO credentials:
 
 **Examples:**
-- "Using password 'tanzu', chat with Goose and ask about Spring Boot best practices"
-- "My password is 'tanzu'. Send a message to Goose: What are the latest Java features?"
-- "Ask Goose how to optimize this code" (will use cached password or prompt if needed)
+- "Using username 'myuser' and password 'mypass', chat with Goose and ask about Spring Boot best practices"
+- "My SSO credentials are myuser / mypass. Send a message to Goose: What are the latest Java features?"
+- "Ask Goose how to optimize this code" (will use cached credentials or prompt if needed)
 
 Claude will automatically:
-1. Get the password from your request, cache, or prompt you for it
-2. Authenticate with the application (username: `user`, password from you)
+1. Get credentials from your request, cache, or prompt you for them
+2. Authenticate via SSO (OAuth2 flow against UAA identity provider)
 3. Create or reuse a chat session
 4. Send your message
 5. Display Goose's streaming response
@@ -28,25 +28,26 @@ Claude will automatically:
 
 You can also run the helper script directly:
 
-**With password inline:**
+**With credentials inline:**
 ```bash
-./.claude/skills/goose-chat-helper.sh --password tanzu "Your message here"
+./.claude/skills/chat-with-goose/goose-chat-helper.sh --username myuser --password mypass "Your message here"
 ```
 
-**Without password (will prompt or use cache):**
+**Without credentials (will prompt or use cache):**
 ```bash
-./.claude/skills/goose-chat-helper.sh "Your message here"
+./.claude/skills/chat-with-goose/goose-chat-helper.sh "Your message here"
 ```
 
 **With custom URL:**
 ```bash
-./.claude/skills/goose-chat-helper.sh --url https://goose.mycompany.com --password tanzu "Your message here"
+./.claude/skills/chat-with-goose/goose-chat-helper.sh --url https://goose.mycompany.com --username myuser --password mypass "Your message here"
 ```
 
 ## Session Management
 
 - **Sessions** are stored in `/tmp/goose-chat-session.txt`
 - **Cookies** are stored in `/tmp/goose-chat-cookies.txt`
+- **Username** is cached in `/tmp/goose-chat-username.txt` (chmod 600 for security)
 - **Password** is cached in `/tmp/goose-chat-password.txt` (chmod 600 for security)
 - **URL** is cached in `/tmp/goose-chat-url.txt` (chmod 600 for security)
 - Sessions timeout after 30 minutes of inactivity
@@ -57,19 +58,25 @@ You can also run the helper script directly:
 # Start a fresh conversation
 rm /tmp/goose-chat-session.txt
 
-# Clear cached password
-rm /tmp/goose-chat-password.txt
+# Clear cached credentials
+rm /tmp/goose-chat-username.txt /tmp/goose-chat-password.txt
 
 # Reset to default URL
 rm /tmp/goose-chat-url.txt
 
 # Clear all cached data
-rm /tmp/goose-chat-*.txt
+rm /tmp/goose-chat-cookies.txt /tmp/goose-chat-session.txt /tmp/goose-chat-username.txt /tmp/goose-chat-password.txt /tmp/goose-chat-url.txt
 ```
 
 ## How It Works
 
-1. **Authentication**: Uses form-based login with credentials from APP_AUTH_SECRET
+1. **SSO Authentication**: Uses a multi-step OAuth2 flow:
+   - Initiates the OAuth2 authorization flow at `/oauth2/authorization/sso`
+   - Follows redirects to the UAA login page
+   - Extracts the CSRF token from the login form
+   - POSTs credentials to UAA's `/login.do` endpoint
+   - Follows the OAuth2 callback redirect chain back to the app
+   - Verifies authentication via `/auth/status`
 2. **Session Creation**: Calls `POST /api/chat/sessions` to create a new conversation
 3. **Message Streaming**: Calls `GET /api/chat/sessions/{id}/stream` with SSE for real-time responses
 4. **Response Parsing**: Parses Server-Sent Events to display token streams and completion status
@@ -81,15 +88,17 @@ All configuration is in the helper script and skill definition:
 - **App URL:** `https://goose-agent-chat.apps.tas-ndc.kuhn-labs.com` (default)
   - Configurable via `--url` parameter
   - Custom URLs are cached in `/tmp/goose-chat-url.txt`
-- **Username:** `user`
-- **Password:** Provided by user (value from APP_AUTH_SECRET environment variable)
+- **SSO Username:** Provided by user via `--username` parameter
+  - Cached in `/tmp/goose-chat-username.txt` after first use
+- **SSO Password:** Provided by user via `--password` parameter
   - Cached in `/tmp/goose-chat-password.txt` after first use
 
 ## Troubleshooting
 
 **Authentication fails:**
-- Verify the password matches APP_AUTH_SECRET
+- Verify the SSO username and password are correct
 - Check that the application is running at the configured URL
+- Ensure the UAA identity provider is reachable
 
 **Session creation fails:**
 - Ensure you're authenticated

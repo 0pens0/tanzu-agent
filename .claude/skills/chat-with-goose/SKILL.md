@@ -1,18 +1,19 @@
 # Chat with Goose
 
-**Description:** Send messages to the Goose Agent Chat application with automatic authentication and session management.
+**Description:** Send messages to the Goose Agent Chat application with automatic SSO authentication and session management.
 
 **Usage:**
-- `/chat-with-goose <password> <message>` - Send a message to Goose with password
+- `/chat-with-goose <username> <password> <message>` - Send a message to Goose with SSO credentials
 - Can also be invoked by saying "chat with goose" or "send message to goose"
 
 ## Configuration
 
 - **App URL:** https://goose-agent-chat.apps.tas-ndc.kuhn-labs.com (default, configurable)
-- **Username:** user
-- **Password:** Provided by user (APP_AUTH_SECRET value)
+- **Username:** Provided by user (SSO username)
+- **Password:** Provided by user (SSO password)
 - **Cookie File:** /tmp/goose-chat-cookies.txt
 - **Session File:** /tmp/goose-chat-session.txt
+- **Username Cache:** /tmp/goose-chat-username.txt
 - **Password Cache:** /tmp/goose-chat-password.txt
 - **URL Cache:** /tmp/goose-chat-url.txt
 
@@ -40,7 +41,7 @@ The script uses `https://goose-agent-chat.apps.tas-ndc.kuhn-labs.com` by default
 
 1. **Provide URL inline:**
    ```bash
-   ./.claude/skills/chat-with-goose/goose-chat-helper.sh --url https://my-app.example.com --password PASSWORD "Message"
+   ./.claude/skills/chat-with-goose/goose-chat-helper.sh --url https://my-app.example.com --username USER --password PASSWORD "Message"
    ```
 
 2. **URL is cached:**
@@ -48,42 +49,42 @@ The script uses `https://goose-agent-chat.apps.tas-ndc.kuhn-labs.com` by default
    - Subsequent calls reuse the cached URL
    - To switch back to default, delete the cache file
 
-### Password Handling
+### Credential Handling
 
-**IMPORTANT:** The user must provide the password. You have three options:
+**IMPORTANT:** The user must provide SSO credentials (username and password). You have three options:
 
-1. **User provides password inline:**
+1. **User provides credentials inline:**
    ```bash
-   ./.claude/skills/chat-with-goose/goose-chat-helper.sh --password PASSWORD "User's message here"
+   ./.claude/skills/chat-with-goose/goose-chat-helper.sh --username USER --password PASSWORD "User's message here"
    ```
 
-2. **User provides password separately:**
-   Ask the user for the password first, then pass it to the script:
+2. **User provides credentials separately:**
+   Ask the user for credentials first, then pass them to the script:
    ```bash
-   ./.claude/skills/chat-with-goose/goose-chat-helper.sh --password=PASSWORD "User's message here"
+   ./.claude/skills/chat-with-goose/goose-chat-helper.sh --username=USER --password=PASSWORD "User's message here"
    ```
 
-3. **Prompt user for password:**
-   If the user doesn't provide a password, the script will prompt for it:
+3. **Prompt user for credentials:**
+   If the user doesn't provide credentials, the script will prompt for them:
    ```bash
    ./.claude/skills/chat-with-goose/goose-chat-helper.sh "User's message here"
-   # Script will display: "Password required for authentication"
-   # Script will prompt: "Enter password: "
+   # Script will prompt: "Enter SSO username: "
+   # Script will prompt: "Enter SSO password: "
    ```
 
-**Password Caching:**
-- Once provided (via argument or prompt), the password is cached in `/tmp/goose-chat-password.txt`
-- Subsequent calls reuse the cached password automatically
-- If authentication fails, the cache is cleared and the user must provide the password again
-- The cache file has restrictive permissions (600) for security
+**Credential Caching:**
+- Once provided (via argument or prompt), both username and password are cached in `/tmp/goose-chat-username.txt` and `/tmp/goose-chat-password.txt`
+- Subsequent calls reuse the cached credentials automatically
+- If authentication fails, both caches are cleared and the user must provide credentials again
+- Cache files have restrictive permissions (600) for security
 
 ### Usage Flow
 
 The helper script automatically:
-1. Checks if password is provided or cached
-2. Prompts for password if needed
-3. Checks authentication status
-4. Authenticates if needed (using username: `user`, password from user)
+1. Checks if credentials are provided or cached
+2. Prompts for credentials if needed
+3. Checks authentication status via cookies
+4. Authenticates via SSO if needed (multi-step OAuth2 flow against UAA)
 5. Gets or creates a chat session (reuses existing active sessions)
 6. Sends the message and streams the response
 7. Parses SSE events and displays formatted output
@@ -102,10 +103,14 @@ Tool call events are displayed on stderr so they don't interfere with the respon
 
 If the helper script is not available or you need fine-grained control:
 
-1. **Authenticate**: POST to `/auth/login` with form data `username=user&password=tanzu`
-2. **Create Session**: POST to `/api/chat/sessions` with empty JSON body
-3. **Send Message**: GET to `/api/chat/sessions/{sessionId}/stream?message={urlEncodedMessage}`
-4. **Parse SSE**: Extract token events and concatenate the response
+1. **Initiate SSO**: GET `/oauth2/authorization/sso` with a cookie jar, follow redirects to the UAA login page
+2. **Extract CSRF token**: Parse the `X-Uaa-Csrf` hidden input value from the UAA login page HTML
+3. **Submit credentials**: POST to the UAA `/login.do` endpoint with `username`, `password`, and `X-Uaa-Csrf` fields
+4. **Follow OAuth callback**: GET the redirect URL returned by UAA (follows redirect chain back to the app with an authorization code)
+5. **Verify authentication**: GET `/auth/status` - should return `{"authenticated":true, ...}`
+6. **Create Session**: POST to `/api/chat/sessions` with empty JSON body
+7. **Send Message**: GET to `/api/chat/sessions/{sessionId}/stream?message={urlEncodedMessage}`
+8. **Parse SSE**: Extract token events and concatenate the response
 
 See `goose-chat-helper.sh` for detailed implementation.
 
@@ -118,25 +123,25 @@ See `goose-chat-helper.sh` for detailed implementation.
 
 ## Examples
 
-### Example 1: User provides password inline
+### Example 1: User provides credentials inline
 
-User says: "Chat with Goose using password 'tanzu' and ask about Spring Boot best practices"
-
-Execute:
-```bash
-./.claude/skills/chat-with-goose/goose-chat-helper.sh --password tanzu "What are Spring Boot best practices?"
-```
-
-### Example 2: User provides password separately
-
-User says: "My password is 'tanzu'. Now chat with Goose and ask about microservices"
+User says: "Chat with Goose using username 'myuser' and password 'mypass' and ask about Spring Boot best practices"
 
 Execute:
 ```bash
-./.claude/skills/chat-with-goose/goose-chat-helper.sh --password=tanzu "Tell me about microservices architecture"
+./.claude/skills/chat-with-goose/goose-chat-helper.sh --username myuser --password mypass "What are Spring Boot best practices?"
 ```
 
-### Example 3: No password provided (will prompt)
+### Example 2: User provides credentials separately
+
+User says: "My SSO username is 'myuser' and password is 'mypass'. Now chat with Goose and ask about microservices"
+
+Execute:
+```bash
+./.claude/skills/chat-with-goose/goose-chat-helper.sh --username=myuser --password=mypass "Tell me about microservices architecture"
+```
+
+### Example 3: No credentials provided (will prompt)
 
 User says: "Chat with Goose and ask how to optimize database queries"
 
@@ -145,9 +150,9 @@ Execute:
 ./.claude/skills/chat-with-goose/goose-chat-helper.sh "How do I optimize database queries in Spring Boot?"
 ```
 
-The script will prompt: `Enter password:` and wait for user input.
+The script will prompt: `Enter SSO username:` and `Enter SSO password:` and wait for user input.
 
-### Example 4: Using cached password
+### Example 4: Using cached credentials
 
 User says: "Ask Goose another question about Spring Security"
 
@@ -156,15 +161,15 @@ Execute:
 ./.claude/skills/chat-with-goose/goose-chat-helper.sh "Explain Spring Security best practices"
 ```
 
-The script will use the cached password from previous authentication (no prompt needed).
+The script will use the cached credentials from previous authentication (no prompt needed).
 
 ### Example 5: Using custom URL
 
-User says: "Connect to my Goose instance at https://goose.mycompany.com using password 'secret' and ask about deployment"
+User says: "Connect to my Goose instance at https://goose.mycompany.com using username 'admin' password 'secret' and ask about deployment"
 
 Execute:
 ```bash
-./.claude/skills/chat-with-goose/goose-chat-helper.sh --url https://goose.mycompany.com --password secret "How do I deploy to production?"
+./.claude/skills/chat-with-goose/goose-chat-helper.sh --url https://goose.mycompany.com --username admin --password secret "How do I deploy to production?"
 ```
 
 The custom URL will be cached and reused for subsequent requests.
@@ -172,11 +177,11 @@ The custom URL will be cached and reused for subsequent requests.
 ## Notes
 
 - Sessions timeout after 30 minutes of inactivity by default
-- The skill maintains state using temporary files for cookies, session ID, password, and URL
+- The skill maintains state using temporary files for cookies, session ID, credentials, and URL
 - Multiple invocations reuse the same session for conversation continuity
 - **Clear cached data:**
   - Fresh conversation: `rm /tmp/goose-chat-session.txt`
-  - Clear password: `rm /tmp/goose-chat-password.txt`
+  - Clear credentials: `rm /tmp/goose-chat-username.txt /tmp/goose-chat-password.txt`
   - Reset to default URL: `rm /tmp/goose-chat-url.txt`
-  - Clear everything: `rm /tmp/goose-chat-*.txt`
-- **Security:** Password and URL are never stored in the skill code, only in temporary files with restrictive permissions (600)
+  - Clear everything: `rm /tmp/goose-chat-cookies.txt /tmp/goose-chat-session.txt /tmp/goose-chat-username.txt /tmp/goose-chat-password.txt /tmp/goose-chat-url.txt`
+- **Security:** Credentials and URL are never stored in the skill code, only in temporary files with restrictive permissions (600)
