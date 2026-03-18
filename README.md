@@ -177,7 +177,8 @@ OAuth credentials for MCP servers (GitHub, Cloud Foundry, etc.) are managed by t
 1. A user pre-authorizes target systems (e.g., GitHub) in the Credential Broker's UI
 2. At session creation, goose-agent-chat obtains a **delegation token** from the broker using the user's UAA access token
 3. Before each Goose execution, the delegation token is used to request short-lived **resource access tokens** from the broker
-4. These tokens are injected into Goose's `config.yaml` as `Authorization` headers for each MCP server
+4. The broker returns the credential **and** the MCP server URL for each target system
+5. Both are injected into Goose's `config.yaml` — the URL as the server endpoint and the credential as an `Authorization` header
 
 ### Configuration
 
@@ -188,7 +189,17 @@ Set the `BROKER_BASE_URL` environment variable to enable broker integration:
 BROKER_BASE_URL: https://agent-credential-broker.apps.example.com
 ```
 
-MCP servers that require authentication should have `requiresAuth: true` in `.goose-config.yml`. No `clientId`, `clientSecret`, or `scopes` are needed — those are managed by the broker.
+MCP servers that require authentication should have `requiresAuth: true` in `.goose-config.yml`. The `url` field can be omitted — the broker provides the MCP server URL at runtime alongside the credential. No `clientId`, `clientSecret`, or `scopes` are needed either — those are all managed by the broker.
+
+```yaml
+mcpServers:
+  - name: github
+    type: streamable_http
+    requiresAuth: true
+  - name: cloud-foundry
+    type: streamable_http
+    requiresAuth: true
+```
 
 ## Configuration
 

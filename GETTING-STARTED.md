@@ -95,20 +95,18 @@ Remote MCP servers are ideal for Cloud Foundry deployments since they don't requ
 ```yaml
 # .goose-config.yml
 mcpServers:
-  # Cloud Foundry MCP server - credentials managed by Agent Credential Broker
+  # Cloud Foundry MCP server - credentials and URL managed by Agent Credential Broker
   - name: cloud-foundry
     type: streamable_http
-    url: "https://cloud-foundry-mcp-server.apps.example.com/mcp"
     requiresAuth: true
 
-  # GitHub MCP server - credentials managed by Agent Credential Broker
+  # GitHub MCP server - credentials and URL managed by Agent Credential Broker
   - name: github
     type: streamable_http
-    url: "https://api.githubcopilot.com/mcp/"
     requiresAuth: true
 ```
 
-For servers that require authentication, set `requiresAuth: true`. No `clientId`, `clientSecret`, or `scopes` are needed in the app configuration — credential management is handled by the [Agent Credential Broker](#credential-management-with-the-agent-credential-broker).
+For servers that require authentication, set `requiresAuth: true`. The `url` field can be omitted — the Agent Credential Broker provides both the credential and the MCP server URL at runtime. No `clientId`, `clientSecret`, or `scopes` are needed in the app configuration either — credential management is handled by the [Agent Credential Broker](#credential-management-with-the-agent-credential-broker).
 
 ### Adding Local MCP Servers
 
@@ -140,8 +138,8 @@ OAuth credentials for MCP servers (GitHub, Cloud Foundry, etc.) are managed cent
 
 1. **User grants access** — A user pre-authorizes target systems (e.g., GitHub, Cloud Foundry) in the Credential Broker's web UI
 2. **Delegation token** — At session creation, goose-agent-chat obtains a signed delegation token from the broker, using the user's UAA access token for authentication
-3. **Credential injection** — Before each Goose execution, the delegation token is exchanged for short-lived access tokens for each MCP server
-4. **Transparent auth** — Access tokens are injected as `Authorization` headers into Goose's `config.yaml`, so MCP servers receive authenticated requests
+3. **Credential injection** — Before each Goose execution, the delegation token is exchanged for short-lived access tokens for each MCP server. The broker also returns the MCP server URL for each target system.
+4. **Transparent auth** — Access tokens and MCP server URLs are injected into Goose's `config.yaml`, so MCP servers receive authenticated requests at the correct endpoints
 
 ### Prerequisites
 
@@ -162,17 +160,16 @@ This is the only configuration needed in goose-agent-chat. The broker manages al
 
 ### MCP Server Configuration
 
-MCP servers that require authentication should have `requiresAuth: true` in `.goose-config.yml`:
+MCP servers that require authentication should have `requiresAuth: true` in `.goose-config.yml`. The `url` field can be omitted — the broker returns it at runtime alongside the credential:
 
 ```yaml
 mcpServers:
   - name: github
     type: streamable_http
-    url: "https://api.githubcopilot.com/mcp/"
     requiresAuth: true
 ```
 
-No `clientId`, `clientSecret`, or `scopes` fields are needed — the broker handles those details.
+No `url`, `clientId`, `clientSecret`, or `scopes` fields are needed — the broker is the single source of truth for endpoint URLs and credential details.
 
 ### Verifying Broker Connectivity
 
@@ -539,21 +536,19 @@ skills:
       - [ ] Follows project style guide
 
 # MCP Servers for extended capabilities
-# Credentials managed by Agent Credential Broker (set BROKER_BASE_URL)
+# Credentials and URLs managed by Agent Credential Broker (set BROKER_BASE_URL)
 mcpServers:
-  # GitHub MCP server
+  # GitHub MCP server — URL and credentials provided by broker at runtime
   - name: github
     type: streamable_http
-    url: "https://api.githubcopilot.com/mcp/"
     requiresAuth: true
 
-  # Cloud Foundry MCP server
+  # Cloud Foundry MCP server — URL and credentials provided by broker at runtime
   - name: cloud-foundry
     type: streamable_http
-    url: "https://cloud-foundry-mcp-server.apps.example.com/mcp"
     requiresAuth: true
   
-  # Public MCP server (no authentication needed)
+  # Public MCP server (no authentication needed — url required here)
   - name: internal-tools
     type: streamable_http
     url: "https://internal-mcp.apps.example.com/mcp"
