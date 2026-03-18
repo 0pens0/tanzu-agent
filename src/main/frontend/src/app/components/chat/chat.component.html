@@ -42,20 +42,6 @@
         <div class="session-actions">
           <button
             mat-icon-button
-            (click)="toggleConfigPanel()"
-            [matTooltip]="configPanelCollapsed() ? 'Show config panel' : 'Hide config panel'"
-          >
-            <mat-icon>{{ configPanelCollapsed() ? 'settings' : 'settings' }}</mat-icon>
-          </button>
-          <button
-            mat-icon-button
-            (click)="toggleActivityPanel()"
-            [matTooltip]="activityPanelCollapsed() ? 'Show activity panel' : 'Hide activity panel'"
-          >
-            <mat-icon>{{ activityPanelCollapsed() ? 'visibility' : 'visibility_off' }}</mat-icon>
-          </button>
-          <button
-            mat-icon-button
             (click)="startNewConversation()"
             [disabled]="isCreatingSession() || !gooseAvailable"
             matTooltip="Start new conversation"
