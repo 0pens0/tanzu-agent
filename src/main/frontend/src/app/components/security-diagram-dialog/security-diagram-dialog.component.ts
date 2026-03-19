@@ -4,7 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 
 const STEP_INTERVAL_MS = 1000;
-const MAX_STEPS = 7;
+const MAX_STEPS = 8;
 
 @Component({
   selector: 'app-security-diagram-dialog',
