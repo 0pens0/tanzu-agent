@@ -1,10 +1,12 @@
-import { Component, computed, input, output, signal, OnInit } from '@angular/core';
+import { Component, computed, inject, input, output, signal, OnInit } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { ChatService, GooseConfig, SkillInfo, McpServerInfo } from '../../services/chat.service';
 import { McpOAuthService } from '../../services/mcp-oauth.service';
+import { SecurityDiagramDialogComponent } from '../security-diagram-dialog/security-diagram-dialog.component';
 
 @Component({
   selector: 'app-config-panel',
@@ -13,7 +15,8 @@ import { McpOAuthService } from '../../services/mcp-oauth.service';
     MatIconModule,
     MatButtonModule,
     MatTooltipModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    MatDialogModule,
   ],
   templateUrl: './config-panel.component.html',
   styleUrl: './config-panel.component.scss'
@@ -37,6 +40,8 @@ export class ConfigPanelComponent implements OnInit {
   readonly hasContent = computed(() => this.hasSkills() || this.hasMcpServers());
 
   readonly isBrokerMode = computed(() => this.oauthService.isBrokerMode);
+
+  private dialog = inject(MatDialog);
 
   constructor(
     private chatService: ChatService,
@@ -132,6 +137,13 @@ export class ConfigPanelComponent implements OnInit {
 
   requiresAuth(server: McpServerInfo): boolean {
     return server.requiresAuth === true;
+  }
+
+  openSecurityDiagram(): void {
+    this.dialog.open(SecurityDiagramDialogComponent, {
+      width: '880px',
+      maxWidth: '95vw',
+    });
   }
 
   openBrokerGrants(): void {

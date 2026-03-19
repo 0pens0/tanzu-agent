@@ -67,6 +67,16 @@
               <mat-icon class="section-icon">dns</mat-icon>
               <span class="section-title">MCP Servers</span>
               <span class="section-count">{{ mcpServers().length }}</span>
+              @if (isBrokerMode()) {
+                <button
+                  mat-icon-button
+                  class="how-it-works-btn"
+                  matTooltip="How does credential brokering work?"
+                  (click)="openSecurityDiagram()"
+                >
+                  <mat-icon>info_outline</mat-icon>
+                </button>
+              }
             </div>
             <div class="items-list">
               @for (server of mcpServers(); track server.name) {
