@@ -157,6 +157,10 @@
   &.label-right {
     text-anchor: start;
   }
+
+  &.label-left {
+    text-anchor: end;
+  }
 }
 
 .flow-return {

@@ -79,34 +79,35 @@
               [attr.stroke-dashoffset]="lineDashOffset(1)" />
         <circle cx="130" cy="255" r="10" class="step-number" />
         <text x="130" y="255" class="step-num-text">1</text>
-        <text x="152" y="255" class="step-label label-right">User SSO Token</text>
+        <text x="152" y="245" class="step-label label-right">User SSO</text>
+        <text x="152" y="258" class="step-label label-right">Token</text>
       </g>
 
       <!-- Step 2: Token Exchange over mTLS -->
       <g class="step" [attr.opacity]="stepOpacity(2)">
-        <line x1="210" y1="135" x2="340" y2="135" class="flow-line mtls-line"
+        <line x1="210" y1="130" x2="340" y2="130" class="flow-line mtls-line"
               [attr.stroke-dashoffset]="lineDashOffset(2)" />
-        <circle cx="275" cy="135" r="10" class="step-number" />
-        <text x="275" y="135" class="step-num-text">2</text>
-        <text x="275" y="115" class="step-label">Token Exchange (mTLS)</text>
+        <circle cx="275" cy="130" r="10" class="step-number" />
+        <text x="275" y="130" class="step-num-text">2</text>
+        <text x="275" y="85" class="step-label">Token Exchange (mTLS)</text>
       </g>
 
       <!-- Step 3: Broker issues delegation token -->
       <g class="step" [attr.opacity]="stepOpacity(3)">
-        <path d="M 340,160 L 210,160" class="flow-line flow-return" fill="none"
+        <path d="M 340,155 L 210,155" class="flow-line flow-return" fill="none"
               [attr.stroke-dashoffset]="lineDashOffset(3)" />
-        <circle cx="275" cy="160" r="10" class="step-number" />
-        <text x="275" y="160" class="step-num-text">3</text>
-        <text x="275" y="182" class="step-label">Delegation JWT Returned</text>
+        <circle cx="275" cy="155" r="10" class="step-number" />
+        <text x="275" y="155" class="step-num-text">3</text>
+        <text x="275" y="175" class="step-label">Delegation JWT Returned</text>
       </g>
 
       <!-- Step 4: Credential request over mTLS -->
       <g class="step" [attr.opacity]="stepOpacity(4)">
-        <line x1="210" y1="195" x2="340" y2="195" class="flow-line mtls-line"
+        <line x1="210" y1="200" x2="340" y2="200" class="flow-line mtls-line"
               [attr.stroke-dashoffset]="lineDashOffset(4)" />
-        <circle cx="275" cy="195" r="10" class="step-number" />
-        <text x="275" y="195" class="step-num-text">4</text>
-        <text x="275" y="217" class="step-label">Credential Request</text>
+        <circle cx="275" cy="200" r="10" class="step-number" />
+        <text x="275" y="200" class="step-num-text">4</text>
+        <text x="275" y="222" class="step-label">Credential Request</text>
       </g>
 
       <!-- Step 5: Broker checks (arrows to check boxes) -->
@@ -127,15 +128,16 @@
               [attr.stroke-dashoffset]="lineDashOffset(6)" />
         <circle cx="420" cy="265" r="10" class="step-number" />
         <text x="420" y="265" class="step-num-text">6</text>
-        <text x="442" y="265" class="step-label label-right">Verify Grant</text>
+        <text x="398" y="265" class="step-label label-left">Verify Grant</text>
       </g>
 
       <!-- Step 7: Broker fetches from target -->
       <g class="step" [attr.opacity]="stepOpacity(7)">
-        <line x1="500" y1="340" x2="600" y2="340" class="flow-line"
+        <line x1="520" y1="215" x2="600" y2="340" class="flow-line"
               [attr.stroke-dashoffset]="lineDashOffset(7)" />
-        <circle cx="550" cy="340" r="10" class="step-number" />
-        <text x="550" y="340" class="step-num-text">7</text>
+        <circle cx="560" cy="278" r="10" class="step-number" />
+        <text x="560" y="278" class="step-num-text">7</text>
+        <text x="582" y="278" class="step-label label-right">Fetch Credential</text>
       </g>
     </svg>
   </div>
