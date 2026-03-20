@@ -6,8 +6,7 @@
 @use '@angular/material' as mat;
 
 // Import the shared theme CSS custom properties
-// Note: @import must come after @use in Sass
-@import 'theme';
+@use 'theme';
 
 html {
   // Goose theme - using cyan/orange palette for a distinctive look
