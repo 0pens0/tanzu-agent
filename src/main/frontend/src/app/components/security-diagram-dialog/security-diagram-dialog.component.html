@@ -6,6 +6,17 @@
 <mat-dialog-content>
   <div class="diagram-viewport">
     <svg class="diagram-svg" viewBox="0 0 820 490" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow-primary" viewBox="0 0 10 10" refX="10" refY="5"
+                markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-primary" />
+        </marker>
+        <marker id="arrow-tertiary" viewBox="0 0 10 10" refX="10" refY="5"
+                markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-tertiary" />
+        </marker>
+      </defs>
+
       <!-- Tanzu Platform boundary -->
       <rect class="platform-boundary" x="10" y="10" width="800" height="470" rx="12" />
       <text class="platform-label" x="410" y="38">Tanzu Platform (Cloud Foundry)</text>
@@ -76,6 +87,7 @@
       <!-- Step 1: Agent has user's SSO token -->
       <g class="step" [attr.opacity]="stepOpacity(1)">
         <line x1="130" y1="275" x2="130" y2="350" class="flow-line"
+              marker-end="url(#arrow-primary)"
               [attr.stroke-dashoffset]="lineDashOffset(1)" />
         <circle cx="130" cy="315" r="10" class="step-number" />
         <text x="130" y="315" class="step-num-text">1</text>
@@ -86,6 +98,7 @@
       <!-- Step 2: Token Exchange over mTLS -->
       <g class="step" [attr.opacity]="stepOpacity(2)">
         <line x1="210" y1="130" x2="340" y2="130" class="flow-line mtls-line"
+              marker-end="url(#arrow-primary)"
               [attr.stroke-dashoffset]="lineDashOffset(2)" />
         <circle cx="275" cy="130" r="10" class="step-number" />
         <text x="275" y="130" class="step-num-text">2</text>
@@ -95,6 +108,7 @@
       <!-- Step 3: Broker issues delegation token -->
       <g class="step" [attr.opacity]="stepOpacity(3)">
         <path d="M 340,160 L 210,160" class="flow-line flow-return" fill="none"
+              marker-end="url(#arrow-tertiary)"
               [attr.stroke-dashoffset]="lineDashOffset(3)" />
         <circle cx="275" cy="160" r="10" class="step-number" />
         <text x="275" y="160" class="step-num-text">3</text>
@@ -104,6 +118,7 @@
       <!-- Step 4: Credential request over mTLS -->
       <g class="step" [attr.opacity]="stepOpacity(4)">
         <line x1="210" y1="210" x2="340" y2="210" class="flow-line mtls-line"
+              marker-end="url(#arrow-primary)"
               [attr.stroke-dashoffset]="lineDashOffset(4)" />
         <circle cx="275" cy="210" r="10" class="step-number" />
         <text x="275" y="210" class="step-num-text">4</text>
@@ -113,10 +128,13 @@
       <!-- Step 5: Broker checks (arrows to check boxes) -->
       <g class="step" [attr.opacity]="stepOpacity(5)">
         <line x1="520" y1="107" x2="560" y2="107" class="flow-line"
+              marker-end="url(#arrow-primary)"
               [attr.stroke-dashoffset]="lineDashOffset(5)" />
         <line x1="520" y1="150" x2="560" y2="150" class="flow-line"
+              marker-end="url(#arrow-primary)"
               [attr.stroke-dashoffset]="lineDashOffset(5)" />
         <line x1="520" y1="193" x2="560" y2="193" class="flow-line"
+              marker-end="url(#arrow-primary)"
               [attr.stroke-dashoffset]="lineDashOffset(5)" />
         <circle cx="540" cy="150" r="10" class="step-number" />
         <text x="540" y="150" class="step-num-text">5</text>
@@ -125,6 +143,7 @@
       <!-- Step 6: Broker queries DB -->
       <g class="step" [attr.opacity]="stepOpacity(6)">
         <line x1="420" y1="275" x2="420" y2="370" class="flow-line"
+              marker-end="url(#arrow-primary)"
               [attr.stroke-dashoffset]="lineDashOffset(6)" />
         <circle cx="420" cy="325" r="10" class="step-number" />
         <text x="420" y="325" class="step-num-text">6</text>
@@ -134,6 +153,7 @@
       <!-- Step 7: Broker fetches from target -->
       <g class="step" [attr.opacity]="stepOpacity(7)">
         <line x1="520" y1="275" x2="600" y2="400" class="flow-line"
+              marker-end="url(#arrow-primary)"
               [attr.stroke-dashoffset]="lineDashOffset(7)" />
         <circle cx="560" cy="338" r="10" class="step-number" />
         <text x="560" y="338" class="step-num-text">7</text>
@@ -143,6 +163,7 @@
       <!-- Step 8: Broker returns ResourceAccessToken -->
       <g class="step" [attr.opacity]="stepOpacity(8)">
         <path d="M 340,258 L 210,258" class="flow-line flow-return" fill="none"
+              marker-end="url(#arrow-tertiary)"
               [attr.stroke-dashoffset]="lineDashOffset(8)" />
         <circle cx="275" cy="258" r="10" class="step-number" />
         <text x="275" y="258" class="step-num-text">8</text>

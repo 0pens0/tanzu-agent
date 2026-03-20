@@ -163,6 +163,16 @@
   }
 }
 
+// --- Arrow markers ---
+
+.arrow-primary {
+  fill: var(--mat-sys-primary);
+}
+
+.arrow-tertiary {
+  fill: var(--mat-sys-tertiary);
+}
+
 .flow-return {
   stroke: var(--mat-sys-tertiary);
 }
