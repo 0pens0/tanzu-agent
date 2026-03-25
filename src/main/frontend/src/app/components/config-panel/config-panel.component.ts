@@ -101,6 +101,13 @@ export class ConfigPanelComponent implements OnInit {
     return skill.name;
   }
 
+  getSkillRepoUrl(skill: SkillInfo): string | null {
+    if (skill.source !== 'git' || !skill.repository) return null;
+    const base = skill.repository.replace(/\.git$/, '');
+    const branch = skill.branch || 'main';
+    return skill.path ? `${base}/tree/${branch}/${skill.path}` : base;
+  }
+
   getMcpServerIcon(server: McpServerInfo): string {
     return server.type === 'streamable_http' ? 'cloud' : 'terminal';
   }
@@ -121,17 +128,8 @@ export class ConfigPanelComponent implements OnInit {
   }
 
   getMcpServerDetail(server: McpServerInfo): string {
-    if (server.url) {
-      try {
-        const url = new URL(server.url);
-        return url.host;
-      } catch {
-        return server.url;
-      }
-    }
-    if (server.command) {
-      return server.command;
-    }
+    if (server.url) return server.url;
+    if (server.command) return server.command;
     return '';
   }
 

@@ -1,4 +1,4 @@
-import { Component, signal, effect, ViewChild, ElementRef, computed } from '@angular/core';
+import { Component, signal, effect, ViewChild, ElementRef, computed, OnInit } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -33,7 +33,7 @@ import { ConfigPanelComponent } from '../config-panel/config-panel.component';
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.scss'
 })
-export class ChatComponent {
+export class ChatComponent implements OnInit {
   @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
   
   protected messages = signal<ChatMessage[]>([]);
@@ -44,10 +44,24 @@ export class ChatComponent {
   protected isCreatingSession = signal(false);
   protected activityPanelCollapsed = signal(false);
   protected configPanelCollapsed = signal(false);
+  protected suggestedPrompts = signal<string[]>([]);
   
   // Expose activities and todos from the service
   protected activities = computed(() => this.chatService.activities());
   protected todos = computed(() => this.chatService.todos());
+
+  private readonly SKILL_PROMPTS: Record<string, string> = {
+    'gmail':            'Send an email via Gmail',
+    'mailgun':          'Send an email via Mailgun',
+    'cf-space-auditor': 'Audit my Cloud Foundry spaces',
+  };
+
+  private readonly MCP_PROMPTS: Record<string, string> = {
+    'github-mcp-server': 'Show my open GitHub pull requests',
+    'bosh':              'List all BOSH deployments',
+    'tanzu-platform':    'Show my Tanzu Platform spaces',
+    'factory':           'List Factory pipeline tasks',
+  };
 
   constructor(
     private chatService: ChatService,
@@ -82,6 +96,26 @@ export class ChatComponent {
         this.startNewConversation();
       }
     });
+  }
+
+  ngOnInit(): void {
+    this.chatService.getConfig().then(config => {
+      const prompts: string[] = ['What can you help me with?'];
+      for (const skill of config.skills ?? []) {
+        const p = this.SKILL_PROMPTS[skill.name];
+        if (p) prompts.push(p);
+      }
+      for (const server of config.mcpServers ?? []) {
+        const p = this.MCP_PROMPTS[server.name];
+        if (p) prompts.push(p);
+      }
+      this.suggestedPrompts.set(prompts);
+    });
+  }
+
+  protected useSuggestion(prompt: string): void {
+    this.userInput.set(prompt);
+    this.sendMessage();
   }
 
   protected get gooseAvailable(): boolean {
