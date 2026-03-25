@@ -1,6 +1,6 @@
 ---
 applications:
-  - name: goose-agent-chat
+  - name: goose-agent-chat-v2
     path: target/goose-agent-chat-1.0.0.jar
     memory: 2G
     buildpacks:
@@ -18,7 +18,8 @@ applications:
       BROKER_PUBLIC_URL: ((BROKER_PUBLIC_URL))
       # Provider/model configuration is in .goose-config.yml (src/main/resources)
       # API key for the configured provider (set via CredHub or cf set-env):
-      # OPENAI_API_KEY: ((OPENAI_API_KEY))
+      OPENAI_API_KEY: ((OPENAI_API_KEY))
+      GITHUB_TOKEN: ((GITHUB_TOKEN))
       # ANTHROPIC_API_KEY: ((ANTHROPIC_API_KEY))
       # GOOGLE_API_KEY: ((GOOGLE_API_KEY))
       # DATABRICKS_HOST: ((DATABRICKS_HOST))

@@ -2,6 +2,7 @@ package org.tanzu.goosechat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
 import org.tanzu.goose.cf.GooseExecutor;
 import org.tanzu.goose.cf.GooseExecutionException;
@@ -24,12 +25,17 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
@@ -627,6 +633,45 @@ public class GooseChatController {
         
         long timeSinceLastActivity = System.currentTimeMillis() - session.lastActivity();
         return timeSinceLastActivity < session.inactivityTimeout().toMillis();
+    }
+
+    /**
+     * Expands ${VAR} references in the buildpack-generated Goose config.yaml using
+     * the app's environment variables. Runs once at startup before any session starts.
+     * This is necessary because GooseEnvironmentManager only forwards a fixed set of
+     * provider-related env vars to the Goose subprocess, and Goose CLI does not perform
+     * shell-style variable substitution in config.yaml header values at runtime.
+     */
+    @PostConstruct
+    private void expandEnvVarsInGooseConfig() {
+        String home = System.getenv("HOME");
+        if (home == null) return;
+        Path configFile = Paths.get(home, ".config", "goose", "config.yaml");
+        if (!Files.exists(configFile)) {
+            logger.debug("Goose config.yaml not found at {}, skipping env var expansion", configFile);
+            return;
+        }
+        try {
+            String content = Files.readString(configFile);
+            Pattern pattern = Pattern.compile("\\$\\{([^}]+)\\}");
+            Matcher matcher = pattern.matcher(content);
+            StringBuffer expanded = new StringBuffer();
+            while (matcher.find()) {
+                String varName = matcher.group(1);
+                String value = System.getenv(varName);
+                if (value != null) {
+                    matcher.appendReplacement(expanded, Matcher.quoteReplacement(value));
+                    logger.info("Expanded ${{{}}}} in Goose config.yaml", varName);
+                } else {
+                    matcher.appendReplacement(expanded, Matcher.quoteReplacement(matcher.group(0)));
+                    logger.debug("Env var ${{{}}}} not set, leaving unexpanded", varName);
+                }
+            }
+            matcher.appendTail(expanded);
+            Files.writeString(configFile, expanded.toString());
+        } catch (IOException e) {
+            logger.warn("Could not expand env vars in Goose config.yaml: {}", e.getMessage());
+        }
     }
 
     /**
