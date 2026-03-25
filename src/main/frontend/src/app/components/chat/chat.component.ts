@@ -35,6 +35,7 @@ import { ConfigPanelComponent } from '../config-panel/config-panel.component';
 })
 export class ChatComponent implements OnInit {
   @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
+  @ViewChild('messageInput') private messageInput!: ElementRef<HTMLTextAreaElement>;
   
   protected messages = signal<ChatMessage[]>([]);
   protected userInput = signal('');
@@ -116,6 +117,7 @@ export class ChatComponent implements OnInit {
   protected useSuggestion(prompt: string): void {
     this.userInput.set(prompt);
     this.sendMessage();
+    this.focusInput();
   }
 
   protected get gooseAvailable(): boolean {
@@ -273,6 +275,7 @@ export class ChatComponent implements OnInit {
     this.messages.update(msgs => [...msgs, userMessage]);
     this.userInput.set('');
     this.isStreaming.set(true);
+    this.focusInput();
 
     // Add assistant message placeholder
     const assistantMessage: ChatMessage = {
@@ -373,6 +376,10 @@ export class ChatComponent implements OnInit {
   protected onInputChange(event: Event): void {
     const target = event.target as HTMLTextAreaElement;
     this.userInput.set(target.value);
+  }
+
+  private focusInput(): void {
+    setTimeout(() => this.messageInput?.nativeElement?.focus(), 0);
   }
 
   private scrollToBottom(): void {

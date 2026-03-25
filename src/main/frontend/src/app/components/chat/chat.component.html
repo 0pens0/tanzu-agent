@@ -127,6 +127,7 @@
         <mat-label>Type your message...</mat-label>
         <textarea
           matInput
+          #messageInput
           [value]="userInput()"
           (input)="onInputChange($event)"
           (keypress)="onKeyPress($event)"
