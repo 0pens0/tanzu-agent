@@ -1,0 +1,185 @@
+:host {
+  display: block;
+}
+
+.dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .title-icon {
+    color: var(--mat-sys-primary);
+  }
+}
+
+.diagram-viewport {
+  min-height: 300px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+.diagram-svg {
+  width: 100%;
+  max-width: 820px;
+  height: auto;
+}
+
+// --- Platform boundary ---
+
+.platform-boundary {
+  fill: var(--mat-sys-surface-container-low);
+  stroke: var(--mat-sys-outline-variant);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 3;
+}
+
+.platform-label {
+  font-family: Roboto, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  fill: var(--mat-sys-on-surface-variant);
+  text-anchor: middle;
+}
+
+// --- C2C boundary ---
+
+.c2c-boundary {
+  fill: none;
+  stroke: var(--mat-sys-primary);
+  stroke-width: 1.5;
+  stroke-dasharray: 8 4;
+  opacity: 0.5;
+}
+
+.c2c-label {
+  font-family: Roboto, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  fill: var(--mat-sys-primary);
+  text-anchor: middle;
+  opacity: 0.8;
+}
+
+// --- Nodes ---
+
+.node rect {
+  fill: var(--mat-sys-surface-container);
+  stroke: var(--mat-sys-outline-variant);
+  stroke-width: 1.2;
+  transition: stroke 0.4s ease, stroke-width 0.4s ease, fill 0.4s ease;
+}
+
+.node-title {
+  font-family: Roboto, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  fill: var(--mat-sys-on-surface);
+  text-anchor: middle;
+}
+
+.node-sub {
+  font-family: Roboto, sans-serif;
+  font-size: 10px;
+  fill: var(--mat-sys-on-surface-variant);
+  text-anchor: middle;
+}
+
+.cert-detail {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 8px;
+}
+
+.verify-label {
+  font-weight: 500;
+}
+
+// --- Check nodes ---
+
+.check-node rect {
+  fill: var(--mat-sys-surface-container-highest);
+  stroke: var(--mat-sys-outline-variant);
+  stroke-width: 1;
+  transition: fill 0.4s ease, stroke 0.4s ease;
+}
+
+.check-text {
+  font-family: Roboto, sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  fill: var(--mat-sys-on-surface);
+  text-anchor: middle;
+}
+
+// --- Flow lines ---
+
+.flow-line {
+  stroke: var(--mat-sys-primary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 200;
+  transition: stroke-dashoffset 0.6s ease-out;
+}
+
+.mtls-line {
+  stroke-width: 3;
+}
+
+// --- Steps ---
+
+.step {
+  transition: opacity 0.5s ease;
+}
+
+// --- Step numbers ---
+
+.step-number {
+  fill: var(--mat-sys-primary);
+}
+
+.step-num-text {
+  font-family: Roboto, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  fill: var(--mat-sys-on-primary);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.step-label {
+  font-family: Roboto, sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  fill: var(--mat-sys-primary);
+  text-anchor: middle;
+
+  &.label-right {
+    text-anchor: start;
+  }
+
+  &.label-left {
+    text-anchor: end;
+  }
+}
+
+// --- Arrow markers ---
+
+.arrow-primary {
+  fill: var(--mat-sys-primary);
+}
+
+.arrow-tertiary {
+  fill: var(--mat-sys-tertiary);
+}
+
+.flow-return {
+  stroke: var(--mat-sys-tertiary);
+}
+
+// Reduced motion: disable transitions
+@media (prefers-reduced-motion: reduce) {
+  .step, .flow-line, .node rect, .check-node rect {
+    transition: none !important;
+  }
+}

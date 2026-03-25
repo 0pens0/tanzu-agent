@@ -14,7 +14,17 @@
           <span class="session-text">
             @if (sessionId()) {
               <strong>Active Conversation</strong>
-              <span class="session-id">Session: {{ sessionId()?.substring(0, 8) }}...</span>
+              <span class="session-id-row">
+                <span class="session-id">Session: {{ sessionId()?.substring(0, 8) }}...</span>
+                <button
+                  mat-icon-button
+                  (click)="copySessionId()"
+                  matTooltip="Copy session ID to clipboard"
+                  class="copy-session-btn"
+                >
+                  <mat-icon>content_copy</mat-icon>
+                </button>
+              </span>
             } @else {
               <strong>No Active Session</strong>
             }
@@ -30,20 +40,6 @@
           }
         </div>
         <div class="session-actions">
-          <button
-            mat-icon-button
-            (click)="toggleConfigPanel()"
-            [matTooltip]="configPanelCollapsed() ? 'Show config panel' : 'Hide config panel'"
-          >
-            <mat-icon>{{ configPanelCollapsed() ? 'settings' : 'settings' }}</mat-icon>
-          </button>
-          <button
-            mat-icon-button
-            (click)="toggleActivityPanel()"
-            [matTooltip]="activityPanelCollapsed() ? 'Show activity panel' : 'Hide activity panel'"
-          >
-            <mat-icon>{{ activityPanelCollapsed() ? 'visibility' : 'visibility_off' }}</mat-icon>
-          </button>
           <button
             mat-icon-button
             (click)="startNewConversation()"

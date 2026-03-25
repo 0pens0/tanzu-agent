@@ -8,14 +8,47 @@
 provider: openai
 
 # Model to use with the provider
-model: gpt-5.2-chat-latest
+model: gpt-5.2
 
 # Extensions to enable by default
 extensions:
   developer:
     enabled: true
+  delegate:
+    enabled: false
 
 # Session defaults
 session:
   # Maximum turns before requiring user input (prevents runaway sessions)
   max_turns: 100
+
+skills:
+  - name: cf-space-auditor
+    source: https://github.com/0pens0/tanzu-skills-marketplace.git
+    branch: main
+    path: skills/cf-space-auditor
+  - name: mailgun
+    source: https://github.com/0pens0/tanzu-skills-marketplace.git
+    branch: main
+    path: skills/mailgun
+  - name: gmail
+    source: https://github.com/0pens0/tanzu-skills-marketplace.git
+    branch: main
+    path: skills/gmail
+
+mcpServers:
+  - name: tanzu-platform
+    type: streamable_http
+    url: "https://tanzu-mcp-server.apps.tp.penso.io/mcp"
+  - name: github-mcp-server
+    type: streamable_http
+    url: "https://github-mcp-server.apps.tp.penso.io/mcp"
+    headers:
+      Authorization: "Bearer ${GITHUB_TOKEN}"
+  - name: bosh
+    type: streamable_http
+    url: "https://bosh-mcp-server.apps.tp.penso.io/mcp"
+  - name: factory
+    type: streamable_http
+    url: "https://factory-mcp.apps.tp.penso.io/mcp"
+

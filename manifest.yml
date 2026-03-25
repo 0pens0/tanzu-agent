@@ -1,19 +1,31 @@
 ---
 applications:
-  - name: goose-agent-chat
+  - name: goose-agent-chat-v2
     path: target/goose-agent-chat-1.0.0.jar
     memory: 2G
     buildpacks:
       - https://github.com/cpage-pivotal/goose-buildpack
       - java_buildpack_offline
+    services:
+      - agent-sso
     env:
       JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 21.+ } }'
       GOOSE_ENABLED: true
+      # GOOSE_VERSION: 1.27.2
+      # Agent Credential Broker internal URL for mTLS C2C communication
+      BROKER_BASE_URL: ((BROKER_BASE_URL))
+      # Public broker URL for browser links (grants page, etc.)
+      BROKER_PUBLIC_URL: ((BROKER_PUBLIC_URL))
       # Provider/model configuration is in .goose-config.yml (src/main/resources)
       # API key for the configured provider (set via CredHub or cf set-env):
-      # ANTHROPIC_API_KEY: ((ANTHROPIC_API_KEY))
       OPENAI_API_KEY: ((OPENAI_API_KEY))
+      GITHUB_TOKEN: ((GITHUB_TOKEN))
+      MAILGUN_API_KEY: ((MAILGUN_API_KEY))
+      MAILGUN_DOMAIN: ((MAILGUN_DOMAIN))
+      MAILGUN_FROM_EMAIL: ((MAILGUN_FROM_EMAIL))
+      GMAIL_ADDRESS: ((GMAIL_ADDRESS))
+      GMAIL_APP_PASSWORD: ((GMAIL_APP_PASSWORD))
+      # ANTHROPIC_API_KEY: ((ANTHROPIC_API_KEY))
       # GOOGLE_API_KEY: ((GOOGLE_API_KEY))
       # DATABRICKS_HOST: ((DATABRICKS_HOST))
       # DATABRICKS_TOKEN: ((DATABRICKS_TOKEN))
-

@@ -67,6 +67,16 @@
               <mat-icon class="section-icon">dns</mat-icon>
               <span class="section-title">MCP Servers</span>
               <span class="section-count">{{ mcpServers().length }}</span>
+              @if (isBrokerMode()) {
+                <button
+                  mat-icon-button
+                  class="how-it-works-btn"
+                  matTooltip="How does credential brokering work?"
+                  (click)="openSecurityDiagram()"
+                >
+                  <mat-icon>info_outline</mat-icon>
+                </button>
+              }
             </div>
             <div class="items-list">
               @for (server of mcpServers(); track server.name) {
@@ -76,9 +86,20 @@
                     <span class="item-name">{{ server.name }}</span>
                     <span class="item-description">{{ getMcpServerDetail(server) }}</span>
                   </div>
-                  <span class="item-badge" [class.http]="server.type === 'streamable_http'">
-                    {{ getMcpServerTypeLabel(server) }}
-                  </span>
+                  
+                  @if (requiresAuth(server) && isBrokerMode()) {
+                    <button 
+                      mat-icon-button 
+                      class="auth-button"
+                      matTooltip="Manage in Credential Broker"
+                      (click)="openBrokerGrants(); $event.stopPropagation()">
+                      <mat-icon>open_in_new</mat-icon>
+                    </button>
+                  } @else {
+                    <span class="item-badge" [class.http]="server.type === 'streamable_http'">
+                      {{ getMcpServerTypeLabel(server) }}
+                    </span>
+                  }
                 </div>
               }
             </div>

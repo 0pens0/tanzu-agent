@@ -1,9 +1,12 @@
-import { Component, computed, input, output, signal, OnInit } from '@angular/core';
+import { Component, computed, inject, input, output, signal, OnInit } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { ChatService, GooseConfig, SkillInfo, McpServerInfo } from '../../services/chat.service';
+import { McpOAuthService } from '../../services/mcp-oauth.service';
+import { SecurityDiagramDialogComponent } from '../security-diagram-dialog/security-diagram-dialog.component';
 
 @Component({
   selector: 'app-config-panel',
@@ -12,7 +15,8 @@ import { ChatService, GooseConfig, SkillInfo, McpServerInfo } from '../../servic
     MatIconModule,
     MatButtonModule,
     MatTooltipModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    MatDialogModule,
   ],
   templateUrl: './config-panel.component.html',
   styleUrl: './config-panel.component.scss'
@@ -35,10 +39,18 @@ export class ConfigPanelComponent implements OnInit {
   readonly hasMcpServers = computed(() => this.mcpServers().length > 0);
   readonly hasContent = computed(() => this.hasSkills() || this.hasMcpServers());
 
-  constructor(private chatService: ChatService) {}
+  readonly isBrokerMode = computed(() => this.oauthService.isBrokerMode);
+
+  private dialog = inject(MatDialog);
+
+  constructor(
+    private chatService: ChatService,
+    private oauthService: McpOAuthService
+  ) {}
 
   ngOnInit(): void {
     this.loadConfig();
+    this.oauthService.checkBrokerConfig();
   }
 
   private async loadConfig(): Promise<void> {
@@ -80,11 +92,9 @@ export class ConfigPanelComponent implements OnInit {
   }
 
   getSkillTooltip(skill: SkillInfo): string {
-    // Prioritize description for tooltip
     if (skill.description) {
       return skill.description;
     }
-    // Fall back to source info if no description
     if (skill.repository) {
       return `${skill.repository}${skill.branch ? ` (${skill.branch})` : ''}${skill.path ? ` → ${skill.path}` : ''}`;
     }
@@ -112,7 +122,6 @@ export class ConfigPanelComponent implements OnInit {
 
   getMcpServerDetail(server: McpServerInfo): string {
     if (server.url) {
-      // Show just the host for HTTP servers
       try {
         const url = new URL(server.url);
         return url.host;
@@ -124,5 +133,20 @@ export class ConfigPanelComponent implements OnInit {
       return server.command;
     }
     return '';
+  }
+
+  requiresAuth(server: McpServerInfo): boolean {
+    return server.requiresAuth === true;
+  }
+
+  openSecurityDiagram(): void {
+    this.dialog.open(SecurityDiagramDialogComponent, {
+      width: '880px',
+      maxWidth: '95vw',
+    });
+  }
+
+  openBrokerGrants(): void {
+    this.oauthService.openBrokerGrants();
   }
 }

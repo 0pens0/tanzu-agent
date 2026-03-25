@@ -2,24 +2,40 @@ package org.tanzu.goosechat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
 import org.tanzu.goose.cf.GooseExecutor;
 import org.tanzu.goose.cf.GooseExecutionException;
 import org.tanzu.goose.cf.GooseOptions;
+import org.tanzu.goose.cf.McpServerInfo;
+import org.tanzu.goose.cf.broker.BrokerCredentialInjector;
+import org.tanzu.goose.cf.broker.CredentialBrokerClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
@@ -55,6 +71,9 @@ public class GooseChatController {
     private static final String SESSION_PREFIX = "chat-";
     
     private final GooseExecutor executor;
+    private final BrokerCredentialInjector brokerCredentialInjector;
+    private final CredentialBrokerClient brokerClient;
+    private final OAuth2AuthorizedClientService authorizedClientService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
     
@@ -66,9 +85,15 @@ public class GooseChatController {
         return t;
     });
 
-    public GooseChatController(GooseExecutor executor) {
+    public GooseChatController(GooseExecutor executor,
+                               @Autowired(required = false) BrokerCredentialInjector brokerCredentialInjector,
+                               @Autowired(required = false) CredentialBrokerClient brokerClient,
+                               @Autowired(required = false) OAuth2AuthorizedClientService authorizedClientService) {
         this.executor = executor;
-        logger.info("GooseChatController initialized with Goose native session support");
+        this.brokerCredentialInjector = brokerCredentialInjector;
+        this.brokerClient = brokerClient;
+        this.authorizedClientService = authorizedClientService;
+        logger.info("GooseChatController initialized (broker integration: {})", brokerClient != null ? "enabled" : "disabled");
         
         // Schedule periodic session cleanup
         cleanupExecutor.scheduleAtFixedRate(this::cleanupExpiredSessions, 1, 1, TimeUnit.MINUTES);
@@ -116,6 +141,19 @@ public class GooseChatController {
                 System.currentTimeMillis()
             );
             
+            // Obtain a delegation token from the broker if available
+            if (brokerClient != null) {
+                try {
+                    String delegationToken = obtainDelegationToken();
+                    if (delegationToken != null) {
+                        session.setDelegationToken(delegationToken);
+                        logger.info("Obtained delegation token for session {}", sessionId);
+                    }
+                } catch (Exception e) {
+                    logger.warn("Failed to obtain delegation token for session {} — broker credentials will be unavailable", sessionId, e);
+                }
+            }
+
             sessions.put(sessionId, session);
             
             logger.info("Created conversation session: {} with provider: {}", sessionId, provider);
@@ -205,8 +243,20 @@ public class GooseChatController {
                 // Priority: 1. GenAI service (if available), 2. Session config, 3. Environment
                 GooseOptions options = buildGooseOptions(session);
 
+                // Inject credentials via the broker
+                if (brokerCredentialInjector != null && session.getDelegationToken() != null) {
+                    var result = brokerCredentialInjector.injectCredentials(session.getDelegationToken());
+
+                    for (String system : result.delegationRequired()) {
+                        emitter.send(SseEmitter.event()
+                                .name("delegation_required")
+                                .data("{\"targetSystem\":\"" + system + "\"}"));
+                    }
+                }
+
                 // Execute Goose with streaming JSON output for token-level streaming
                 boolean isFirstMessage = session.messageCount() == 0;
+                
                 jsonStream = executor.executeInSessionStreamingJson(
                     sessionId, message, !isFirstMessage, options
                 );
@@ -218,6 +268,7 @@ public class GooseChatController {
                 final long[] lastSendTime = {System.currentTimeMillis()};
                 final int BATCH_SIZE_THRESHOLD = 10; // Send after N tokens
                 final long BATCH_TIME_THRESHOLD_MS = 100; // Or after 100ms
+                final List<String> toolCallLog = new ArrayList<>();
                 
                 jsonStream.forEach(jsonLine -> {
                     try {
@@ -227,7 +278,7 @@ public class GooseChatController {
                         switch (eventType) {
                             case "message" -> {
                                 // Check for tool requests in the message content
-                                String activityJson = extractToolActivityFromMessage(event, sessionId);
+                                String activityJson = extractToolActivityFromMessage(event, sessionId, toolCallLog);
                                 if (activityJson != null) {
                                     emitter.send(SseEmitter.event()
                                         .name("activity")
@@ -301,6 +352,9 @@ public class GooseChatController {
                 }
                 
                 logger.info("Session {} sent {} tokens in batches", sessionId, tokenCount[0]);
+                if (!toolCallLog.isEmpty()) {
+                    logger.info("Session {} tool call summary: {}", sessionId, String.join(", ", toolCallLog));
+                }
                 
                 // Increment message count
                 session.incrementMessageCount();
@@ -382,9 +436,10 @@ public class GooseChatController {
      *   }
      * }
      * 
+     * @param toolCallLog mutable list to accumulate tool names for the summary log
      * @return JSON string for the activity event, or null if no tool activity
      */
-    private String extractToolActivityFromMessage(JsonNode event, String sessionId) {
+    private String extractToolActivityFromMessage(JsonNode event, String sessionId, List<String> toolCallLog) {
         JsonNode content = event.at("/message/content");
         if (!content.isArray()) {
             return null;
@@ -417,6 +472,10 @@ public class GooseChatController {
                     String extensionId = parsedTool.extensionId();
                     String shortToolName = parsedTool.toolName();
                     
+                    logger.info("Session {} tool_request: {} ({}) args: {}", 
+                        sessionId, shortToolName, extensionId, arguments);
+                    toolCallLog.add(shortToolName);
+                    
                     // Build activity JSON
                     var activityNode = objectMapper.createObjectNode();
                     activityNode.put("id", id);
@@ -438,6 +497,9 @@ public class GooseChatController {
                 try {
                     String id = item.has("id") ? item.get("id").asText() : "";
                     boolean isError = item.has("is_error") && item.get("is_error").asBoolean();
+                    
+                    logger.info("Session {} tool_response: {} (id: {})", 
+                        sessionId, isError ? "error" : "completed", id);
                     
                     var activityNode = objectMapper.createObjectNode();
                     activityNode.put("id", id);
@@ -574,6 +636,45 @@ public class GooseChatController {
     }
 
     /**
+     * Expands ${VAR} references in the buildpack-generated Goose config.yaml using
+     * the app's environment variables. Runs once at startup before any session starts.
+     * This is necessary because GooseEnvironmentManager only forwards a fixed set of
+     * provider-related env vars to the Goose subprocess, and Goose CLI does not perform
+     * shell-style variable substitution in config.yaml header values at runtime.
+     */
+    @PostConstruct
+    private void expandEnvVarsInGooseConfig() {
+        String home = System.getenv("HOME");
+        if (home == null) return;
+        Path configFile = Paths.get(home, ".config", "goose", "config.yaml");
+        if (!Files.exists(configFile)) {
+            logger.debug("Goose config.yaml not found at {}, skipping env var expansion", configFile);
+            return;
+        }
+        try {
+            String content = Files.readString(configFile);
+            Pattern pattern = Pattern.compile("\\$\\{([^}]+)\\}");
+            Matcher matcher = pattern.matcher(content);
+            StringBuffer expanded = new StringBuffer();
+            while (matcher.find()) {
+                String varName = matcher.group(1);
+                String value = System.getenv(varName);
+                if (value != null) {
+                    matcher.appendReplacement(expanded, Matcher.quoteReplacement(value));
+                    logger.info("Expanded ${{{}}}} in Goose config.yaml", varName);
+                } else {
+                    matcher.appendReplacement(expanded, Matcher.quoteReplacement(matcher.group(0)));
+                    logger.debug("Env var ${{{}}}} not set, leaving unexpanded", varName);
+                }
+            }
+            matcher.appendTail(expanded);
+            Files.writeString(configFile, expanded.toString());
+        } catch (IOException e) {
+            logger.warn("Could not expand env vars in Goose config.yaml: {}", e.getMessage());
+        }
+    }
+
+    /**
      * Build GooseOptions for a session.
      * <p>
      * Provider/model configuration is handled via environment variables
@@ -619,7 +720,59 @@ public class GooseChatController {
             optionsBuilder.baseUrl(openaiHost);
         }
 
+        // Forward custom env vars to Goose subprocess so skills and MCP headers
+        // can access them. GooseEnvironmentManager only forwards provider-specific vars.
+        for (String var : new String[]{"GITHUB_TOKEN", "MAILGUN_API_KEY", "MAILGUN_DOMAIN", "MAILGUN_FROM_EMAIL",
+                "GMAIL_ADDRESS", "GMAIL_APP_PASSWORD"}) {
+            String value = System.getenv(var);
+            if (value != null && !value.isEmpty()) {
+                optionsBuilder.addEnv(var, value);
+            }
+        }
+
         return optionsBuilder.build();
+    }
+
+    /**
+     * Obtain a delegation token from the broker using the current user's UAA access token.
+     * The access token (a JWT on the uaa plan) is validated by the broker via the shared
+     * UAA JWKS endpoint (same p-identity SSO instance).
+     */
+    private String obtainDelegationToken() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (!(auth instanceof OAuth2AuthenticationToken oauthToken)) {
+            logger.warn("Cannot obtain delegation token: authentication is not OAuth2");
+            return null;
+        }
+
+        if (authorizedClientService == null) {
+            logger.warn("Cannot obtain delegation token: no OAuth2AuthorizedClientService");
+            return null;
+        }
+
+        OAuth2AuthorizedClient authorizedClient = authorizedClientService.loadAuthorizedClient(
+                oauthToken.getAuthorizedClientRegistrationId(), oauthToken.getName());
+
+        if (authorizedClient == null || authorizedClient.getAccessToken() == null) {
+            logger.warn("Cannot obtain delegation token: no authorized client or access token");
+            return null;
+        }
+
+        String accessToken = authorizedClient.getAccessToken().getTokenValue();
+
+        List<String> allowedSystems = executor.getConfiguration().mcpServers().stream()
+                .filter(McpServerInfo::requiresAuth)
+                .map(McpServerInfo::name)
+                .toList();
+
+        if (allowedSystems.isEmpty()) {
+            logger.debug("No MCP servers require auth — skipping delegation token creation");
+            return null;
+        }
+
+        var delegationResponse = brokerClient.createDelegation(accessToken, allowedSystems);
+
+        return delegationResponse.token();
     }
 
     /**
@@ -691,6 +844,7 @@ public class GooseChatController {
         private final Duration inactivityTimeout;
         private volatile long lastActivity;
         private volatile int messageCount;
+        private volatile String delegationToken;
 
         ConversationSession(String provider, String model, 
                            Duration inactivityTimeout, long createdAt) {
@@ -706,6 +860,8 @@ public class GooseChatController {
         Duration inactivityTimeout() { return inactivityTimeout; }
         long lastActivity() { return lastActivity; }
         int messageCount() { return messageCount; }
+        String getDelegationToken() { return delegationToken; }
+        void setDelegationToken(String token) { this.delegationToken = token; }
         
         void updateLastActivity() { 
             this.lastActivity = System.currentTimeMillis(); 
