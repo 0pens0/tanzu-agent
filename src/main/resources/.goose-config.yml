@@ -29,6 +29,10 @@ skills:
     source: https://github.com/0pens0/tanzu-skills-marketplace.git
     branch: main
     path: skills/mailgun
+  - name: gmail
+    source: https://github.com/0pens0/tanzu-skills-marketplace.git
+    branch: main
+    path: skills/gmail
 
 mcpServers:
   - name: tanzu-platform
