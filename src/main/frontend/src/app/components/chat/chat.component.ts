@@ -53,7 +53,6 @@ export class ChatComponent implements OnInit {
 
   private readonly SKILL_PROMPTS: Record<string, string> = {
     'gmail':            'Send an email via Gmail',
-    'mailgun':          'Send an email via Mailgun',
     'cf-space-auditor': 'Audit my Cloud Foundry spaces',
   };
 
@@ -117,7 +116,6 @@ export class ChatComponent implements OnInit {
   protected useSuggestion(prompt: string): void {
     this.userInput.set(prompt);
     this.sendMessage();
-    this.focusInput();
   }
 
   protected get gooseAvailable(): boolean {
@@ -275,7 +273,6 @@ export class ChatComponent implements OnInit {
     this.messages.update(msgs => [...msgs, userMessage]);
     this.userInput.set('');
     this.isStreaming.set(true);
-    this.focusInput();
 
     // Add assistant message placeholder
     const assistantMessage: ChatMessage = {
@@ -346,6 +343,7 @@ export class ChatComponent implements OnInit {
         }
         
         this.isStreaming.set(false);
+        this.focusInput();
       },
       complete: () => {
         this.messages.update(msgs => {
@@ -362,6 +360,7 @@ export class ChatComponent implements OnInit {
           return msgs;
         });
         this.isStreaming.set(false);
+        this.focusInput();
       }
     });
   }
