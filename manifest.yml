@@ -5,6 +5,7 @@ applications:
     memory: 2G
     buildpacks:
       - https://github.com/cpage-pivotal/goose-buildpack
+      - https://github.com/0pens0/maven-buildpack
       - java_buildpack_offline
     services:
       - agent-sso
