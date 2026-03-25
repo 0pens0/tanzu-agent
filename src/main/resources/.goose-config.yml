@@ -5,10 +5,10 @@
 
 # LLM Provider configuration
 # Supported providers: openai, anthropic, google, databricks, ollama
-provider: openai
+provider: anthropic
 
 # Model to use with the provider
-model: gpt-5.2
+model: claude-sonnet-4-5
 
 # Extensions to enable by default
 extensions:
