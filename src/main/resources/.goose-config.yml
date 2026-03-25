@@ -23,6 +23,10 @@ session:
   max_turns: 100
 
 skills:
+  - name: response-format
+    source: https://github.com/0pens0/tanzu-skills-marketplace.git
+    branch: main
+    path: skills/response-format
   - name: cf-space-auditor
     source: https://github.com/0pens0/tanzu-skills-marketplace.git
     branch: main
