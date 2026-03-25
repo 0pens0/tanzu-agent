@@ -720,6 +720,15 @@ public class GooseChatController {
             optionsBuilder.baseUrl(openaiHost);
         }
 
+        // Forward custom env vars to Goose subprocess so skills and MCP headers
+        // can access them. GooseEnvironmentManager only forwards provider-specific vars.
+        for (String var : new String[]{"GITHUB_TOKEN", "MAILGUN_API_KEY", "MAILGUN_DOMAIN", "MAILGUN_FROM_EMAIL"}) {
+            String value = System.getenv(var);
+            if (value != null && !value.isEmpty()) {
+                optionsBuilder.addEnv(var, value);
+            }
+        }
+
         return optionsBuilder.build();
     }
 

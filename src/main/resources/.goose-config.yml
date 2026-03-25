@@ -25,6 +25,10 @@ skills:
     source: https://github.com/0pens0/tanzu-skills-marketplace.git
     branch: main
     path: skills/cf-space-auditor
+  - name: mailgun
+    source: https://github.com/0pens0/tanzu-skills-marketplace.git
+    branch: main
+    path: skills/mailgun
 
 mcpServers:
   - name: tanzu-platform

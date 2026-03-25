@@ -20,6 +20,9 @@ applications:
       # API key for the configured provider (set via CredHub or cf set-env):
       OPENAI_API_KEY: ((OPENAI_API_KEY))
       GITHUB_TOKEN: ((GITHUB_TOKEN))
+      MAILGUN_API_KEY: ((MAILGUN_API_KEY))
+      MAILGUN_DOMAIN: ((MAILGUN_DOMAIN))
+      MAILGUN_FROM_EMAIL: ((MAILGUN_FROM_EMAIL))
       # ANTHROPIC_API_KEY: ((ANTHROPIC_API_KEY))
       # GOOGLE_API_KEY: ((GOOGLE_API_KEY))
       # DATABRICKS_HOST: ((DATABRICKS_HOST))
