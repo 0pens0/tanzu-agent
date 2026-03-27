@@ -19,4 +19,7 @@ public interface ConversationRepository extends JpaRepository<Conversation, Stri
         LIMIT :limit
         """)
     List<Conversation> findRecentByUserId(@Param("userId") String userId, @Param("limit") int limit);
+
+    /** Delete all conversations that were created but never used (no messages saved). */
+    int deleteByTitleIsNull();
 }

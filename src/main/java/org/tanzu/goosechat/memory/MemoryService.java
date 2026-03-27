@@ -144,13 +144,26 @@ public class MemoryService {
     public List<ConversationSummaryDto> getRecentConversations(String userId) {
         return conversationRepo.findRecentByUserId(userId, RECENT_CONVERSATIONS_LIMIT)
             .stream()
+            // Skip empty sessions — title is only set when the first message is saved
+            .filter(c -> c.getTitle() != null)
             .map(c -> new ConversationSummaryDto(
                 c.getId(),
-                c.getTitle() != null ? c.getTitle() : "Untitled",
+                c.getTitle(),
                 c.getCreatedAt(),
                 c.getUpdatedAt()
             ))
             .collect(Collectors.toList());
+    }
+
+    /**
+     * Delete conversation records that were created but never used (no title = no messages).
+     * Called periodically or on startup to keep the DB tidy.
+     */
+    public void purgeEmptyConversations() {
+        int deleted = conversationRepo.deleteByTitleIsNull();
+        if (deleted > 0) {
+            logger.info("Purged {} empty (untitled) conversation records", deleted);
+        }
     }
 
     /**

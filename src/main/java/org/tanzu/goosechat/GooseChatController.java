@@ -105,7 +105,12 @@ public class GooseChatController {
         logger.info("GooseChatController initialized (broker: {}, memory: {})",
             brokerClient != null ? "enabled" : "disabled",
             memoryService != null ? "enabled" : "disabled");
-        
+
+        // Purge empty (untitled) conversation records left over from aborted sessions
+        if (memoryService != null) {
+            memoryService.purgeEmptyConversations();
+        }
+
         // Schedule periodic session cleanup
         cleanupExecutor.scheduleAtFixedRate(this::cleanupExpiredSessions, 1, 1, TimeUnit.MINUTES);
     }
