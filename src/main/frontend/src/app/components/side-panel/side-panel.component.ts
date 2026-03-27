@@ -2,7 +2,6 @@ import { Component, computed, effect, inject, input, signal, OnInit } from '@ang
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatTabsModule } from '@angular/material/tabs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { ChatService, ActivityEvent, TodoItem, GooseConfig, SkillInfo, McpServerInfo } from '../../services/chat.service';
@@ -12,6 +11,8 @@ import { ActivityPanelComponent } from '../activity-panel/activity-panel.compone
 import { MemoryPanelComponent } from '../memory-panel/memory-panel.component';
 import { SecurityDiagramDialogComponent } from '../security-diagram-dialog/security-diagram-dialog.component';
 
+export type NavSection = 'skills' | 'mcp' | 'activity' | 'memory';
+
 @Component({
   selector: 'app-side-panel',
   standalone: true,
@@ -19,7 +20,6 @@ import { SecurityDiagramDialogComponent } from '../security-diagram-dialog/secur
     MatIconModule,
     MatButtonModule,
     MatTooltipModule,
-    MatTabsModule,
     MatProgressSpinnerModule,
     MatDialogModule,
     ActivityPanelComponent,
@@ -32,29 +32,26 @@ export class SidePanelComponent implements OnInit {
   readonly activities = input<ActivityEvent[]>([]);
   readonly todos      = input<TodoItem[]>([]);
 
-  protected collapsed    = signal(false);
-  protected selectedTab  = signal(0);
+  protected activeSection = signal<NavSection>('skills');
+  protected detailOpen    = signal(true);
 
-  // Config state (absorbed from ConfigPanelComponent)
+  // Config state
   private readonly _config  = signal<GooseConfig | null>(null);
   private readonly _loading = signal(true);
   private readonly _error   = signal<string | null>(null);
 
-  readonly config       = this._config.asReadonly();
-  readonly loading      = this._loading.asReadonly();
-  readonly error        = this._error.asReadonly();
-  readonly skills       = computed(() => this._config()?.skills ?? []);
-  readonly mcpServers   = computed(() => this._config()?.mcpServers ?? []);
-  readonly hasSkills    = computed(() => this.skills().length > 0);
-  readonly hasMcpServers = computed(() => this.mcpServers().length > 0);
-  readonly isBrokerMode = computed(() => this.oauthService.isBrokerMode);
+  readonly config        = this._config.asReadonly();
+  readonly loading       = this._loading.asReadonly();
+  readonly skills        = computed(() => this._config()?.skills ?? []);
+  readonly mcpServers    = computed(() => this._config()?.mcpServers ?? []);
+  readonly isBrokerMode  = computed(() => this.oauthService.isBrokerMode);
 
-  // Activity tab
-  readonly runningCount = computed(() =>
+  // Activity
+  readonly runningCount  = computed(() =>
     this.activities().filter(a => a.status === 'running').length
   );
 
-  // Memory tab
+  // Memory
   readonly memoryAvailable = computed(() => this.memoryService.memoryAvailable());
   readonly contextLoaded   = computed(() => this.memoryService.contextLoaded());
 
@@ -65,10 +62,19 @@ export class SidePanelComponent implements OnInit {
     private oauthService: McpOAuthService,
     private memoryService: MemoryService
   ) {
-    // Auto-switch to Activity tab (index 2) when the agent starts running tools
+    // Auto-switch to Activity when tools start running
     effect(() => {
-      if (this.runningCount() > 0 && !this.collapsed()) {
-        this.selectedTab.set(2);
+      if (this.runningCount() > 0) {
+        this.activeSection.set('activity');
+        this.detailOpen.set(true);
+      }
+    });
+
+    // Refresh memory data when Memory section becomes active
+    effect(() => {
+      if (this.activeSection() === 'memory' && this.detailOpen()) {
+        this.memoryService.loadFacts();
+        this.memoryService.loadConversations();
       }
     });
   }
@@ -84,7 +90,6 @@ export class SidePanelComponent implements OnInit {
     try {
       const config = await this.chatService.getConfig();
       this._config.set(config);
-      if (config.error) this._error.set(config.error);
     } catch {
       this._error.set('Failed to load configuration');
     } finally {
@@ -92,20 +97,36 @@ export class SidePanelComponent implements OnInit {
     }
   }
 
-  protected toggle(): void {
-    this.collapsed.update(v => !v);
-  }
-
-  protected onTabChange(index: number): void {
-    this.selectedTab.set(index);
-    // Refresh memory data when switching to the Memory tab (index 3)
-    if (this.memoryAvailable() && index === 3) {
-      this.memoryService.loadFacts();
-      this.memoryService.loadConversations();
+  protected selectSection(section: NavSection): void {
+    if (this.activeSection() === section) {
+      this.detailOpen.update(v => !v);
+    } else {
+      this.activeSection.set(section);
+      this.detailOpen.set(true);
     }
   }
 
-  // ── Skill helpers (from ConfigPanelComponent) ─────────────────────────
+  protected sectionTitle(section: NavSection): string {
+    const titles: Record<NavSection, string> = {
+      skills:   'Skills',
+      mcp:      'MCP Servers',
+      activity: 'Activity',
+      memory:   'Memory'
+    };
+    return titles[section];
+  }
+
+  protected sectionIcon(section: NavSection): string {
+    const icons: Record<NavSection, string> = {
+      skills:   'school',
+      mcp:      'dns',
+      activity: 'timeline',
+      memory:   'psychology'
+    };
+    return icons[section];
+  }
+
+  // ── Skill helpers ─────────────────────────────────────────────────────
 
   protected getSkillIcon(skill: SkillInfo): string {
     switch (skill.source) {
@@ -138,7 +159,7 @@ export class SidePanelComponent implements OnInit {
     return skill.path ? `${base}/tree/${branch}/${skill.path}` : base;
   }
 
-  // ── MCP Server helpers (from ConfigPanelComponent) ────────────────────
+  // ── MCP Server helpers ────────────────────────────────────────────────
 
   protected getMcpServerIcon(server: McpServerInfo): string {
     return server.type === 'streamable_http' ? 'cloud' : 'terminal';

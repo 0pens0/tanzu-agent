@@ -1,5 +1,11 @@
 <div class="chat-layout">
 
+  <!-- Unified Side Panel — left side (nav rail + detail pane) -->
+  <app-side-panel
+    [activities]="activities()"
+    [todos]="todos()"
+  />
+
   <div class="chat-container">
     <!-- Header with session controls -->
     <div class="chat-header">
@@ -149,9 +155,4 @@
     </div>
   </div>
 
-  <!-- Unified Side Panel (Skills | MCP Servers | Activity | Memory) -->
-  <app-side-panel
-    [activities]="activities()"
-    [todos]="todos()"
-  />
 </div>

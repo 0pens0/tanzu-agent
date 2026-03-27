@@ -1,174 +1,192 @@
-<div class="side-panel" [class.collapsed]="collapsed()">
+<div class="nav-shell">
 
-  <!-- ── Panel header ──────────────────────────────────────────────── -->
-  <div class="panel-header">
-    @if (!collapsed()) {
-      <mat-icon class="header-icon">tune</mat-icon>
-      <span class="header-title">Workspace</span>
-    }
-    <button
-      mat-icon-button
-      class="toggle-btn"
-      (click)="toggle()"
-      [matTooltip]="collapsed() ? 'Expand panel' : 'Collapse panel'"
-    >
-      <mat-icon>{{ collapsed() ? 'chevron_left' : 'chevron_right' }}</mat-icon>
-    </button>
-  </div>
+  <!-- ══════════════════════════════════════════════════════
+       NAV RAIL — always-visible 60px icon strip
+  ══════════════════════════════════════════════════════ -->
+  <nav class="nav-rail">
 
-  <!-- ── Tab group (hidden when collapsed) ────────────────────────── -->
-  @if (!collapsed()) {
-    <mat-tab-group
-      class="panel-tabs"
-      [selectedIndex]="selectedTab()"
-      (selectedIndexChange)="onTabChange($event)"
-      animationDuration="150ms"
-    >
+    <!-- Rail header / logo mark -->
+    <div class="rail-logo">
+      <mat-icon class="logo-icon">smart_toy</mat-icon>
+    </div>
 
-      <!-- ── SKILLS TAB ──────────────────────────────────────────── -->
-      <mat-tab>
-        <ng-template mat-tab-label>
-          <mat-icon class="tab-icon">school</mat-icon>
-          Skills
-          @if (skills().length > 0) {
-            <span class="tab-badge">{{ skills().length }}</span>
+    <!-- Nav items -->
+    <div class="rail-items">
+
+      <!-- Skills -->
+      <button class="rail-item"
+              [class.active]="activeSection() === 'skills' && detailOpen()"
+              (click)="selectSection('skills')"
+              matTooltip="Skills" matTooltipPosition="right">
+        <mat-icon class="rail-icon">school</mat-icon>
+        @if (skills().length > 0) {
+          <span class="rail-badge">{{ skills().length }}</span>
+        }
+      </button>
+
+      <!-- MCP Servers -->
+      <button class="rail-item"
+              [class.active]="activeSection() === 'mcp' && detailOpen()"
+              (click)="selectSection('mcp')"
+              matTooltip="MCP Servers" matTooltipPosition="right">
+        <mat-icon class="rail-icon">dns</mat-icon>
+        @if (mcpServers().length > 0) {
+          <span class="rail-badge">{{ mcpServers().length }}</span>
+        }
+      </button>
+
+      <!-- Activity -->
+      <button class="rail-item"
+              [class.active]="activeSection() === 'activity' && detailOpen()"
+              [class.running]="runningCount() > 0"
+              (click)="selectSection('activity')"
+              matTooltip="Activity" matTooltipPosition="right">
+        <mat-icon class="rail-icon">timeline</mat-icon>
+        @if (runningCount() > 0) {
+          <span class="rail-badge pulse">{{ runningCount() }}</span>
+        }
+      </button>
+
+      <!-- Memory (only when available) -->
+      @if (memoryAvailable()) {
+        <button class="rail-item"
+                [class.active]="activeSection() === 'memory' && detailOpen()"
+                (click)="selectSection('memory')"
+                [matTooltip]="contextLoaded() ? 'Memory · context loaded' : 'Memory'"
+                matTooltipPosition="right">
+          <mat-icon class="rail-icon">psychology</mat-icon>
+          @if (contextLoaded()) {
+            <mat-icon class="rail-bolt">bolt</mat-icon>
           }
-        </ng-template>
+        </button>
+      }
 
-        <div class="tab-content">
-          @if (loading()) {
-            <div class="loading-state">
-              <mat-spinner diameter="24"></mat-spinner>
-              <p>Loading...</p>
-            </div>
-          } @else if (!hasSkills()) {
-            <div class="empty-state">
-              <mat-icon>school</mat-icon>
-              <p>No skills configured.<br>Add skills to .goose-config.yml</p>
-            </div>
-          } @else {
-            <div class="items-list">
-              @for (skill of skills(); track skill.name) {
-                <div class="item" [matTooltip]="getSkillTooltip(skill)" matTooltipPosition="left">
-                  <mat-icon class="item-icon">{{ getSkillIcon(skill) }}</mat-icon>
-                  <div class="item-content">
-                    <span class="item-name">{{ skill.name }}</span>
-                    @if (skill.description) {
-                      <span class="item-description">{{ skill.description }}</span>
-                    }
-                  </div>
-                  @if (skill.source === 'git' && getSkillRepoUrl(skill)) {
-                    <a [href]="getSkillRepoUrl(skill)!" target="_blank" rel="noopener"
-                       class="item-link-btn" matTooltip="View skill source on GitHub"
-                       (click)="$event.stopPropagation()">
-                      <mat-icon>open_in_new</mat-icon>
-                    </a>
-                  } @else {
-                    <span class="item-badge"
-                          [class.git]="skill.source === 'git'"
-                          [class.file]="skill.source === 'file'">
-                      {{ getSkillSourceLabel(skill) }}
-                    </span>
+    </div>
+  </nav>
+
+  <!-- ══════════════════════════════════════════════════════
+       DETAIL PANE — slides open beside the rail
+  ══════════════════════════════════════════════════════ -->
+  <div class="detail-pane" [class.open]="detailOpen()">
+
+    <!-- Detail header -->
+    <div class="detail-header">
+      <mat-icon class="detail-icon">{{ sectionIcon(activeSection()) }}</mat-icon>
+      <span class="detail-title">{{ sectionTitle(activeSection()) }}</span>
+      <button mat-icon-button class="close-btn"
+              (click)="detailOpen.set(false)"
+              matTooltip="Close">
+        <mat-icon>chevron_left</mat-icon>
+      </button>
+    </div>
+
+    <!-- Detail content -->
+    <div class="detail-content">
+
+      <!-- ── SKILLS ────────────────────────────────────────── -->
+      @if (activeSection() === 'skills') {
+        @if (loading()) {
+          <div class="state-center">
+            <mat-spinner diameter="28"></mat-spinner>
+          </div>
+        } @else if (skills().length === 0) {
+          <div class="state-center muted">
+            <mat-icon>school</mat-icon>
+            <p>No skills configured</p>
+          </div>
+        } @else {
+          <div class="items-list">
+            @for (skill of skills(); track skill.name) {
+              <div class="item" [matTooltip]="getSkillTooltip(skill)" matTooltipPosition="right">
+                <mat-icon class="item-icon">{{ getSkillIcon(skill) }}</mat-icon>
+                <div class="item-body">
+                  <span class="item-name">{{ skill.name }}</span>
+                  @if (skill.description) {
+                    <span class="item-desc">{{ skill.description }}</span>
                   }
                 </div>
-              }
-            </div>
-          }
-        </div>
-      </mat-tab>
-
-      <!-- ── MCP SERVERS TAB ─────────────────────────────────────── -->
-      <mat-tab>
-        <ng-template mat-tab-label>
-          <mat-icon class="tab-icon">dns</mat-icon>
-          MCP
-          @if (mcpServers().length > 0) {
-            <span class="tab-badge">{{ mcpServers().length }}</span>
-          }
-        </ng-template>
-
-        <div class="tab-content">
-          @if (loading()) {
-            <div class="loading-state">
-              <mat-spinner diameter="24"></mat-spinner>
-              <p>Loading...</p>
-            </div>
-          } @else if (!hasMcpServers()) {
-            <div class="empty-state">
-              <mat-icon>dns</mat-icon>
-              <p>No MCP servers configured.<br>Add servers to .goose-config.yml</p>
-            </div>
-          } @else {
-            @if (isBrokerMode()) {
-              <div class="broker-banner">
-                <mat-icon class="broker-icon">verified_user</mat-icon>
-                <span>Credential Broker active</span>
-                <button mat-icon-button class="how-it-works-btn"
-                        matTooltip="How does credential brokering work?"
-                        (click)="openSecurityDiagram()">
-                  <mat-icon>info_outline</mat-icon>
-                </button>
+                @if (skill.source === 'git' && getSkillRepoUrl(skill)) {
+                  <a [href]="getSkillRepoUrl(skill)!" target="_blank" rel="noopener"
+                     class="item-link" matTooltip="View on GitHub"
+                     (click)="$event.stopPropagation()">
+                    <mat-icon>open_in_new</mat-icon>
+                  </a>
+                } @else {
+                  <span class="item-badge"
+                        [class.git]="skill.source === 'git'"
+                        [class.file]="skill.source === 'file'">
+                    {{ getSkillSourceLabel(skill) }}
+                  </span>
+                }
               </div>
             }
-            <div class="items-list">
-              @for (server of mcpServers(); track server.name) {
-                <div class="item" [matTooltip]="getMcpServerTooltip(server)" matTooltipPosition="left">
-                  <mat-icon class="item-icon">{{ getMcpServerIcon(server) }}</mat-icon>
-                  <div class="item-content">
-                    <span class="item-name">{{ server.name }}</span>
-                    <span class="item-description">{{ getMcpServerDetail(server) }}</span>
-                  </div>
-                  @if (requiresAuth(server) && isBrokerMode()) {
-                    <button mat-icon-button class="auth-button"
-                            matTooltip="Manage in Credential Broker"
-                            (click)="openBrokerGrants(); $event.stopPropagation()">
-                      <mat-icon>open_in_new</mat-icon>
-                    </button>
-                  } @else {
-                    <span class="item-badge" [class.http]="server.type === 'streamable_http'">
-                      {{ getMcpServerTypeLabel(server) }}
-                    </span>
-                  }
-                </div>
-              }
+          </div>
+        }
+      }
+
+      <!-- ── MCP SERVERS ────────────────────────────────────── -->
+      @if (activeSection() === 'mcp') {
+        @if (loading()) {
+          <div class="state-center">
+            <mat-spinner diameter="28"></mat-spinner>
+          </div>
+        } @else if (mcpServers().length === 0) {
+          <div class="state-center muted">
+            <mat-icon>dns</mat-icon>
+            <p>No MCP servers configured</p>
+          </div>
+        } @else {
+          @if (isBrokerMode()) {
+            <div class="broker-banner">
+              <mat-icon>verified_user</mat-icon>
+              <span>Credential Broker active</span>
+              <button mat-icon-button class="broker-info-btn"
+                      matTooltip="How credential brokering works"
+                      (click)="openSecurityDiagram()">
+                <mat-icon>info_outline</mat-icon>
+              </button>
             </div>
           }
-        </div>
-      </mat-tab>
+          <div class="items-list">
+            @for (server of mcpServers(); track server.name) {
+              <div class="item" [matTooltip]="getMcpServerTooltip(server)" matTooltipPosition="right">
+                <mat-icon class="item-icon">{{ getMcpServerIcon(server) }}</mat-icon>
+                <div class="item-body">
+                  <span class="item-name">{{ server.name }}</span>
+                  <span class="item-desc">{{ getMcpServerDetail(server) }}</span>
+                </div>
+                @if (requiresAuth(server) && isBrokerMode()) {
+                  <button mat-icon-button class="item-action"
+                          matTooltip="Manage in Credential Broker"
+                          (click)="openBrokerGrants(); $event.stopPropagation()">
+                    <mat-icon>open_in_new</mat-icon>
+                  </button>
+                } @else {
+                  <span class="item-badge" [class.http]="server.type === 'streamable_http'">
+                    {{ getMcpServerTypeLabel(server) }}
+                  </span>
+                }
+              </div>
+            }
+          </div>
+        }
+      }
 
-      <!-- ── ACTIVITY TAB ────────────────────────────────────────── -->
-      <mat-tab>
-        <ng-template mat-tab-label>
-          <mat-icon class="tab-icon">timeline</mat-icon>
-          Activity
-          @if (runningCount() > 0) {
-            <span class="tab-badge running">{{ runningCount() }}</span>
-          }
-        </ng-template>
-
+      <!-- ── ACTIVITY ───────────────────────────────────────── -->
+      @if (activeSection() === 'activity') {
         <app-activity-panel
           [activities]="activities()"
           [todos]="todos()"
           [headerless]="true"
         />
-      </mat-tab>
-
-      <!-- ── MEMORY TAB (only when memory layer is active) ──────── -->
-      @if (memoryAvailable()) {
-        <mat-tab>
-          <ng-template mat-tab-label>
-            <mat-icon class="tab-icon">psychology</mat-icon>
-            Memory
-            @if (contextLoaded()) {
-              <mat-icon class="context-indicator" matTooltip="Prior session context was loaded">bolt</mat-icon>
-            }
-          </ng-template>
-
-          <app-memory-panel [headerless]="true" />
-        </mat-tab>
       }
 
-    </mat-tab-group>
-  }
+      <!-- ── MEMORY ─────────────────────────────────────────── -->
+      @if (activeSection() === 'memory') {
+        <app-memory-panel [headerless]="true" />
+      }
+
+    </div>
+  </div>
 
 </div>
