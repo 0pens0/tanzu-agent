@@ -11,6 +11,7 @@ import org.tanzu.goose.cf.McpServerInfo;
 import org.tanzu.goose.cf.broker.BrokerCredentialInjector;
 import org.tanzu.goose.cf.broker.CredentialBrokerClient;
 import org.tanzu.goosechat.memory.MemoryService;
+import org.tanzu.goosechat.memory.MemoryTokenRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -76,11 +77,13 @@ public class GooseChatController {
     private final CredentialBrokerClient brokerClient;
     private final OAuth2AuthorizedClientService authorizedClientService;
     private final MemoryService memoryService;
+    private final MemoryTokenRegistry memoryTokenRegistry;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
     
     // Session metadata tracking (Goose handles actual session persistence)
     private final Map<String, ConversationSession> sessions = new ConcurrentHashMap<>();
+
     private final ScheduledExecutorService cleanupExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "session-cleanup");
         t.setDaemon(true);
@@ -91,12 +94,14 @@ public class GooseChatController {
                                @Autowired(required = false) BrokerCredentialInjector brokerCredentialInjector,
                                @Autowired(required = false) CredentialBrokerClient brokerClient,
                                @Autowired(required = false) OAuth2AuthorizedClientService authorizedClientService,
-                               @Autowired(required = false) MemoryService memoryService) {
+                               @Autowired(required = false) MemoryService memoryService,
+                               @Autowired(required = false) MemoryTokenRegistry memoryTokenRegistry) {
         this.executor = executor;
         this.brokerCredentialInjector = brokerCredentialInjector;
         this.brokerClient = brokerClient;
         this.authorizedClientService = authorizedClientService;
         this.memoryService = memoryService;
+        this.memoryTokenRegistry = memoryTokenRegistry;
         logger.info("GooseChatController initialized (broker: {}, memory: {})",
             brokerClient != null ? "enabled" : "disabled",
             memoryService != null ? "enabled" : "disabled");
@@ -166,6 +171,13 @@ public class GooseChatController {
             if (memoryService != null) {
                 String userId = resolveUserId();
                 session.setUserId(userId);
+                // Generate a per-session token so Goose subprocesses can call
+                // /api/memory/** without SSO cookies (see MemoryController)
+                String memoryToken = UUID.randomUUID().toString();
+                session.setMemoryToken(memoryToken);
+                if (memoryTokenRegistry != null) {
+                    memoryTokenRegistry.register(memoryToken, userId);
+                }
                 memoryService.ensureConversation(sessionId, userId);
                 String context = memoryService.buildContextSummary(userId);
                 if (context != null) {
@@ -631,6 +643,9 @@ public class GooseChatController {
         try {
             ConversationSession removed = sessions.remove(sessionId);
             if (removed != null) {
+                if (removed.getMemoryToken() != null && memoryTokenRegistry != null) {
+                    memoryTokenRegistry.revoke(removed.getMemoryToken());
+                }
                 logger.info("Session {} closed successfully", sessionId);
             }
             return ResponseEntity.ok(
@@ -772,6 +787,11 @@ public class GooseChatController {
             }
         }
 
+        // Pass per-session memory token so the agent can call /api/memory/** via curl
+        if (session.getMemoryToken() != null) {
+            optionsBuilder.addEnv("MEMORY_TOKEN", session.getMemoryToken());
+        }
+
         return optionsBuilder.build();
     }
 
@@ -845,6 +865,9 @@ public class GooseChatController {
             ConversationSession session = entry.getValue();
             boolean expired = (now - session.lastActivity()) >= session.inactivityTimeout().toMillis();
             if (expired) {
+                if (session.getMemoryToken() != null && memoryTokenRegistry != null) {
+                    memoryTokenRegistry.revoke(session.getMemoryToken());
+                }
                 logger.info("Cleaning up expired session: {}", entry.getKey());
             }
             return expired;
@@ -908,6 +931,7 @@ public class GooseChatController {
         private volatile String delegationToken;
         private volatile String userId;
         private volatile String contextSummary; // injected from memory on first turn
+        private volatile String memoryToken;    // per-session token for internal memory API calls
 
         ConversationSession(String provider, String model, 
                            Duration inactivityTimeout, long createdAt) {
@@ -929,6 +953,8 @@ public class GooseChatController {
         void setUserId(String userId) { this.userId = userId; }
         String getContextSummary() { return contextSummary; }
         void setContextSummary(String contextSummary) { this.contextSummary = contextSummary; }
+        String getMemoryToken() { return memoryToken; }
+        void setMemoryToken(String memoryToken) { this.memoryToken = memoryToken; }
         
         void updateLastActivity() { 
             this.lastActivity = System.currentTimeMillis(); 

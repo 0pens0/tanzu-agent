@@ -29,10 +29,14 @@ public class MemoryController {
 
     private final MemoryService memoryService;
     private final FactRepository factRepository;
+    private final MemoryTokenRegistry tokenRegistry;
 
-    public MemoryController(MemoryService memoryService, FactRepository factRepository) {
+    public MemoryController(MemoryService memoryService,
+                            FactRepository factRepository,
+                            MemoryTokenRegistry tokenRegistry) {
         this.memoryService = memoryService;
         this.factRepository = factRepository;
+        this.tokenRegistry = tokenRegistry;
     }
 
     @GetMapping("/conversations")
@@ -90,7 +94,34 @@ public class MemoryController {
     public record SaveFactRequest(String key, String value) {}
     public record FactDto(String key, String value, java.time.Instant updatedAt) {}
 
+    /**
+     * Resolve user identity from the request.
+     * Priority:
+     * 1. Authorization: Bearer <MEMORY_TOKEN> header — used by Goose subprocesses
+     *    that call this endpoint via curl without SSO session cookies.
+     * 2. Spring Security OAuth2 context — used by the Angular frontend (SSO session).
+     * 3. Falls back to "anonymous" if neither is present.
+     */
     private String resolveUserId() {
+        // Check for Bearer token from Goose subprocess
+        jakarta.servlet.http.HttpServletRequest request =
+            ((jakarta.servlet.http.HttpServletRequest)
+                org.springframework.web.context.request.RequestContextHolder
+                    .getRequestAttributes() instanceof
+                org.springframework.web.context.request.ServletRequestAttributes sra
+                ? sra.getRequest() : null);
+
+        if (request != null) {
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                String token = authHeader.substring(7);
+                String userId = tokenRegistry.resolve(token);
+                if (userId != null) {
+                    return userId;
+                }
+            }
+        }
+
         try {
             var auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth instanceof OAuth2AuthenticationToken oauthToken) {

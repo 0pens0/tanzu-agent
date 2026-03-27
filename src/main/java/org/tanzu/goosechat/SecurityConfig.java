@@ -20,7 +20,10 @@ public class SecurityConfig {
                 .requestMatchers(
                     "/actuator/health/**",
                     "/actuator/info",
-                    "/favicon.ico"
+                    "/favicon.ico",
+                    // Memory API is open so Goose subprocesses can call it via curl
+                    // without SSO cookies. User identity is resolved via MEMORY_TOKEN header.
+                    "/api/memory/**"
                 ).permitAll()
                 .anyRequest().authenticated()
             )

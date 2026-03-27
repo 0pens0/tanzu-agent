@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,7 +71,10 @@ public class MemoryService {
      * Persist a single turn (user prompt + assistant response) to PostgreSQL.
      * Evicts the user's conversation list cache so the sidebar stays fresh.
      */
-    @CacheEvict(value = "user-conversations", key = "#userId")
+    @Caching(evict = {
+        @CacheEvict(value = "user-conversations", key = "#userId"),
+        @CacheEvict(value = "user-context",       key = "#userId")
+    })
     public void saveTurn(String sessionId, String userId, String userMessage, String assistantResponse) {
         Conversation conversation = ensureConversation(sessionId, userId);
 
@@ -102,7 +106,7 @@ public class MemoryService {
      *
      * Returns null if the user has no history (first-ever session).
      */
-    @Cacheable(value = "user-context", key = "#userId")
+    @Cacheable(value = "user-context", key = "#userId", unless = "#result == null")
     @Transactional(readOnly = true)
     public String buildContextSummary(String userId) {
         List<Message> recent = messageRepo.findLatestByUserId(userId, CONTEXT_TURNS);
