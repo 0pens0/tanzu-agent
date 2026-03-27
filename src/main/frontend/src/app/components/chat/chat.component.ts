@@ -9,8 +9,10 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCardModule } from '@angular/material/card';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatDividerModule } from '@angular/material/divider';
 import { MarkdownComponent } from 'ngx-markdown';
 import { ChatService, ChatMessage, HealthInfo } from '../../services/chat.service';
+import { MemoryService, ConversationSummary, HistoryMessage } from '../../services/memory.service';
 import { ActivityPanelComponent } from '../activity-panel/activity-panel.component';
 import { ConfigPanelComponent } from '../config-panel/config-panel.component';
 
@@ -26,6 +28,7 @@ import { ConfigPanelComponent } from '../config-panel/config-panel.component';
     MatCardModule,
     MatTooltipModule,
     MatSnackBarModule,
+    MatDividerModule,
     MarkdownComponent,
     ActivityPanelComponent,
     ConfigPanelComponent
@@ -45,15 +48,21 @@ export class ChatComponent implements OnInit {
   protected isCreatingSession = signal(false);
   protected activityPanelCollapsed = signal(false);
   protected configPanelCollapsed = signal(false);
+  protected historyPanelCollapsed = signal(true);
   protected suggestedPrompts = signal<string[]>([]);
+  protected selectedHistorySession = signal<string | null>(null);
+  protected historyMessages = signal<HistoryMessage[]>([]);
   
-  // Expose activities and todos from the service
+  // Expose activities, todos, and memory from services
   protected activities = computed(() => this.chatService.activities());
   protected todos = computed(() => this.chatService.todos());
+  protected conversations = computed(() => this.memoryService.conversations());
+  protected memoryAvailable = computed(() => this.memoryService.memoryAvailable());
 
   private readonly SKILL_PROMPTS: Record<string, string> = {
     'gmail':            'Send an email via Gmail',
     'cf-space-auditor': 'Audit my Cloud Foundry spaces',
+    'memory':           'What do you remember about me?',
   };
 
   private readonly MCP_PROMPTS: Record<string, string> = {
@@ -65,6 +74,7 @@ export class ChatComponent implements OnInit {
 
   constructor(
     private chatService: ChatService,
+    private memoryService: MemoryService,
     private snackBar: MatSnackBar,
     private matIconRegistry: MatIconRegistry,
     private domSanitizer: DomSanitizer
@@ -111,6 +121,9 @@ export class ChatComponent implements OnInit {
       }
       this.suggestedPrompts.set(prompts);
     });
+
+    // Load conversation history (silently — memory profile may not be active)
+    this.memoryService.loadConversations();
   }
 
   protected useSuggestion(prompt: string): void {
@@ -248,6 +261,28 @@ export class ChatComponent implements OnInit {
 
   protected toggleConfigPanel(): void {
     this.configPanelCollapsed.update(v => !v);
+  }
+
+  protected toggleHistoryPanel(): void {
+    this.historyPanelCollapsed.update(v => !v);
+    if (!this.historyPanelCollapsed()) {
+      this.memoryService.loadConversations();
+    }
+  }
+
+  protected async viewHistory(conversation: ConversationSummary): Promise<void> {
+    this.selectedHistorySession.set(conversation.id);
+    const msgs = await this.memoryService.getMessages(conversation.id);
+    this.historyMessages.set(msgs);
+  }
+
+  protected clearHistoryView(): void {
+    this.selectedHistorySession.set(null);
+    this.historyMessages.set([]);
+  }
+
+  protected getRelativeTime(isoString: string): string {
+    return this.memoryService.formatRelativeTime(isoString);
   }
 
   protected sendMessage(): void {
