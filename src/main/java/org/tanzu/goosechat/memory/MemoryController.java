@@ -11,8 +11,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-import java.util.List;
-
 /**
  * REST endpoints for the conversation history sidebar.
  *
@@ -105,11 +103,10 @@ public class MemoryController {
     private String resolveUserId() {
         // Check for Bearer token from Goose subprocess
         jakarta.servlet.http.HttpServletRequest request =
-            ((jakarta.servlet.http.HttpServletRequest)
-                org.springframework.web.context.request.RequestContextHolder
-                    .getRequestAttributes() instanceof
-                org.springframework.web.context.request.ServletRequestAttributes sra
-                ? sra.getRequest() : null);
+            org.springframework.web.context.request.RequestContextHolder
+                .getRequestAttributes() instanceof
+            org.springframework.web.context.request.ServletRequestAttributes sra
+                ? sra.getRequest() : null;
 
         if (request != null) {
             String authHeader = request.getHeader("Authorization");
