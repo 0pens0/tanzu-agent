@@ -51,6 +51,94 @@ The `memory` skill guides the agent to explicitly save and recall named facts (e
 
 ---
 
+## Memory Component Use Cases
+
+The three memory components serve different purposes and complement each other. Understanding when each one applies is important for designing the right demo scenario and for extending the system.
+
+---
+
+### PostgreSQL — Long-term, Durable Storage
+
+**Role:** The permanent record of everything that happened. Source of truth.
+
+**What it stores:**
+- Every user message and every agent response, in order, with timestamps
+- Named key-value facts saved by the agent (`user_name`, `user_role`, `cf_org`, etc.)
+- Conversation metadata (session ID, title, created/updated time)
+
+**When it matters:**
+- Continuity across container restarts or new deployments — SQLite (Goose's native store) lives on the container filesystem and is lost on every `cf push`; PostgreSQL survives
+- Multi-session recall — a user can return days or weeks later and the agent still knows who they are
+- Audit and visibility — the history sidebar in the UI reads directly from PostgreSQL
+- Compliance and traceability — every interaction is stored and queryable
+
+**Analogy:** the long-term memory of a person — slow to access directly, but permanent and complete.
+
+---
+
+### Valkey — Short-term, Fast Cache
+
+**Role:** Speeds up repeated lookups during an active session or across closely-spaced sessions. Currently implemented as an in-memory Spring Cache (`ConcurrentMapCacheManager`); designed to be replaced by Valkey with a one-line dependency change when it becomes available in the marketplace.
+
+**What it caches:**
+- `user-context` — the context summary built from recent PostgreSQL messages, cached per user so the second session of the day doesn't hit the database again
+- `user-conversations` — the list of recent conversations shown in the history sidebar, so every page load doesn't query PostgreSQL
+
+**When it matters:**
+- High-frequency users who open multiple sessions in the same day — Valkey serves the context from memory instead of running a SQL query each time
+- Sidebar responsiveness — conversation list loads instantly from cache rather than waiting on a database round-trip
+- Scale — when the app serves many concurrent users, offloading repeated read queries to Valkey reduces PostgreSQL load significantly
+
+**Cache invalidation:** both caches are evicted immediately whenever `saveTurn` is called, so a new session always gets fresh data after the previous one completes.
+
+**Upgrading to Valkey when available:**
+1. Add `spring-boot-starter-data-redis` to `pom.xml`
+2. Bind a Valkey service instance in `manifest.yml`
+3. Delete `memory/CacheConfig.java` — Spring Boot auto-configures `RedisCacheManager` from the service binding
+4. Optionally set TTLs per cache in `application-memory.properties`
+
+**Analogy:** working memory — fast and immediately available, but temporary.
+
+---
+
+### Memory Skill — Semantic, Agent-curated Facts
+
+**Role:** The agent's own judgment about what is worth remembering. While PostgreSQL passively records everything, the memory skill makes the agent an active participant in managing its own knowledge.
+
+**What it stores:**
+- Specific named facts the agent decides are important: `user_name`, `preferred_language`, `project_name`, `cf_org`, `team_name`, etc.
+- Only what the user has explicitly shared or what the agent judges to be relevant to future sessions
+- Updated or deleted as the user's context changes
+
+**When it matters:**
+- Personalisation at scale — instead of injecting 10 full turns of raw conversation history, the agent can greet the user by name and reference their project with a tiny, precise fact lookup
+- Structured recall — facts are key-value pairs the agent can reason about deterministically, unlike unstructured conversation history
+- User-correctable — the user can say "I've moved to a new project" and the agent updates the fact; raw history would have conflicting signals
+- Lighter context injection — on the first turn, the agent calls `recall_facts` and gets a compact JSON list; no need to inject paragraphs of old conversation
+
+**Interaction with PostgreSQL and Valkey:**
+- Facts are stored in the `facts` table in PostgreSQL (durable)
+- Fact reads go directly to the database (not cached, because facts change frequently and must always be fresh)
+- The passive context from PostgreSQL (Option A) and the explicit facts from the skill (Option B) work together: Option A gives conversation continuity, Option B gives precise structured identity
+
+**Analogy:** the notes someone writes in their notebook — curated, updated, and referenced intentionally, rather than a transcript of everything they ever said.
+
+---
+
+### Summary: When to Use Each
+
+| Question | Use |
+|----------|-----|
+| "Did the agent remember what we talked about yesterday?" | PostgreSQL (passive context injection) |
+| "Does the app load fast when I have 1000 users?" | Valkey (cache layer) |
+| "Does the agent know my name without me re-introducing?" | Memory Skill (named facts) |
+| "Can I see a log of past conversations?" | PostgreSQL (history sidebar) |
+| "Will memory survive a `cf push`?" | PostgreSQL (not Goose's SQLite) |
+| "Can I tell the agent to forget something?" | Memory Skill (`DELETE /api/memory/facts/{key}`) |
+| "How do I make context injection faster over time?" | Valkey (caches the context summary) |
+
+---
+
 ## Previous Changes (merged to main)
 
 | Commit | Change |
