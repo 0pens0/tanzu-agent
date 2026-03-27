@@ -118,17 +118,18 @@ public class MemoryService {
         List<Message> chronological = recent.reversed();
 
         StringBuilder sb = new StringBuilder();
-        sb.append("--- Previous conversation context (most recent ").append(chronological.size())
-          .append(" turns) ---\n");
+        sb.append("[MEMORY: previous ").append(chronological.size()).append(" turns]\n");
 
         for (Message m : chronological) {
             String snippet = m.getContent().length() > SNIPPET_MAX_CHARS
                 ? m.getContent().substring(0, SNIPPET_MAX_CHARS) + "…"
                 : m.getContent();
-            sb.append("[").append(m.getRole().toUpperCase()).append("]: ").append(snippet).append("\n");
+            // Use simple role prefix without special characters that confuse CLI parsers
+            sb.append(m.getRole().equals("user") ? "USER: " : "ASSISTANT: ")
+              .append(snippet).append("\n");
         }
 
-        sb.append("--- End of context ---\n\n");
+        sb.append("[END MEMORY]\n\n");
         return sb.toString();
     }
 
