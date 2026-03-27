@@ -196,6 +196,30 @@
       color: var(--mat-sys-primary);
     }
   }
+
+  .suggestion-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--mat-sys-spacing-2, 8px);
+    justify-content: center;
+    margin-top: var(--mat-sys-spacing-5, 20px);
+    max-width: 560px;
+    animation: slideUpFade 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.5s backwards;
+
+    .suggestion-chip {
+      font-size: 13px;
+      height: 36px;
+      border-radius: 18px;
+      color: var(--mat-sys-primary);
+      border-color: var(--mat-sys-outline-variant);
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+
+      &:hover:not(:disabled) {
+        background-color: var(--mat-sys-primary-container);
+        border-color: var(--mat-sys-primary);
+      }
+    }
+  }
 }
 
 .message {

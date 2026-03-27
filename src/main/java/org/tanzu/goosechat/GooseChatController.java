@@ -722,8 +722,8 @@ public class GooseChatController {
 
         // Forward custom env vars to Goose subprocess so skills and MCP headers
         // can access them. GooseEnvironmentManager only forwards provider-specific vars.
-        for (String var : new String[]{"GITHUB_TOKEN", "MAILGUN_API_KEY", "MAILGUN_DOMAIN", "MAILGUN_FROM_EMAIL",
-                "GMAIL_ADDRESS", "GMAIL_APP_PASSWORD"}) {
+        for (String var : new String[]{"ANTHROPIC_API_KEY", "GITHUB_TOKEN", "MAILGUN_API_KEY", "MAILGUN_DOMAIN",
+                "MAILGUN_FROM_EMAIL", "GMAIL_ADDRESS", "GMAIL_APP_PASSWORD"}) {
             String value = System.getenv(var);
             if (value != null && !value.isEmpty()) {
                 optionsBuilder.addEnv(var, value);

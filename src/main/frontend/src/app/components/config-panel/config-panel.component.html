@@ -50,10 +50,18 @@
                       <span class="item-description">{{ skill.description }}</span>
                     }
                   </div>
-                  <span class="item-badge" [class.git]="skill.source === 'git'" 
-                        [class.file]="skill.source === 'file'">
-                    {{ getSkillSourceLabel(skill) }}
-                  </span>
+                  @if (skill.source === 'git' && getSkillRepoUrl(skill)) {
+                    <a [href]="getSkillRepoUrl(skill)!" target="_blank" rel="noopener"
+                       class="item-link-btn" matTooltip="View skill source on GitHub"
+                       (click)="$event.stopPropagation()">
+                      <mat-icon>open_in_new</mat-icon>
+                    </a>
+                  } @else {
+                    <span class="item-badge" [class.git]="skill.source === 'git'"
+                          [class.file]="skill.source === 'file'">
+                      {{ getSkillSourceLabel(skill) }}
+                    </span>
+                  }
                 </div>
               }
             </div>

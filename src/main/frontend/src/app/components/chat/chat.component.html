@@ -80,6 +80,17 @@
             } @else if (isCreatingSession()) {
               <p class="status-text info">Starting new conversation...</p>
             }
+            @if (suggestedPrompts().length > 0 && sessionId()) {
+              <div class="suggestion-chips">
+                @for (prompt of suggestedPrompts(); track prompt) {
+                  <button mat-stroked-button class="suggestion-chip"
+                    [disabled]="isStreaming()"
+                    (click)="useSuggestion(prompt)">
+                    {{ prompt }}
+                  </button>
+                }
+              </div>
+            }
           } @else {
             <p class="status-text error">{{ gooseMessage || 'Goose CLI is not available' }}</p>
           }
@@ -116,6 +127,7 @@
         <mat-label>Type your message...</mat-label>
         <textarea
           matInput
+          #messageInput
           [value]="userInput()"
           (input)="onInputChange($event)"
           (keypress)="onKeyPress($event)"
