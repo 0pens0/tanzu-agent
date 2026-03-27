@@ -125,7 +125,7 @@ public class GooseChatController {
             if (!executor.isAvailable()) {
                 logger.error("Goose CLI is not available");
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(new CreateSessionResponse(null, false, "Goose CLI is not available"));
+                    .body(new CreateSessionResponse(null, false, "Goose CLI is not available", false));
             }
 
             // Generate session ID with prefix for Goose named sessions
@@ -186,15 +186,16 @@ public class GooseChatController {
                 }
             }
 
-            logger.info("Created conversation session: {} with provider: {}", sessionId, provider);
+            boolean contextLoaded = session.getContextSummary() != null;
+            logger.info("Created conversation session: {} with provider: {}, contextLoaded: {}", sessionId, provider, contextLoaded);
             return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new CreateSessionResponse(sessionId, true, null));
+                .body(new CreateSessionResponse(sessionId, true, null, contextLoaded));
                 
         } catch (Exception e) {
             logger.error("Failed to create conversation session", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new CreateSessionResponse(null, false, 
-                    "Failed to create session: " + e.getMessage()));
+                .body(new CreateSessionResponse(null, false,
+                    "Failed to create session: " + e.getMessage(), false));
         }
     }
 
@@ -885,7 +886,8 @@ public class GooseChatController {
     public record CreateSessionResponse(
         String sessionId,
         boolean success,
-        String message
+        String message,
+        boolean memoryContextLoaded
     ) {}
 
     public record CloseSessionResponse(

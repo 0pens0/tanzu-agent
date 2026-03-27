@@ -1,0 +1,131 @@
+<div class="memory-panel" [class.collapsed]="collapsed()">
+
+  <!-- Header / toggle -->
+  <div class="panel-header" (click)="toggle()">
+    <mat-icon class="panel-icon">psychology</mat-icon>
+    @if (!collapsed()) {
+      <span class="panel-title">Memory</span>
+      @if (contextLoaded()) {
+        <span class="context-badge" matTooltip="Prior session context was injected at startup">
+          <mat-icon class="badge-icon">bolt</mat-icon>context
+        </span>
+      }
+    }
+    <mat-icon class="collapse-icon">
+      {{ collapsed() ? 'chevron_left' : 'chevron_right' }}
+    </mat-icon>
+  </div>
+
+  <!-- Expanded content -->
+  @if (!collapsed()) {
+    <mat-tab-group class="panel-tabs" animationDuration="150ms">
+
+      <!-- ── FACTS TAB ─────────────────────────────────────────────── -->
+      <mat-tab>
+        <ng-template mat-tab-label>
+          <mat-icon class="tab-icon">bookmark</mat-icon>
+          Facts
+          @if (facts().length > 0) {
+            <span class="tab-badge">{{ facts().length }}</span>
+          }
+        </ng-template>
+
+        <div class="tab-content">
+          <div class="tab-toolbar">
+            <span class="tab-description">
+              Key facts the agent has saved about you
+            </span>
+            <button mat-icon-button (click)="refreshFacts()" matTooltip="Refresh">
+              <mat-icon>refresh</mat-icon>
+            </button>
+          </div>
+
+          @if (facts().length === 0) {
+            <div class="empty-state">
+              <mat-icon>info_outline</mat-icon>
+              <p>No facts saved yet.<br>Tell the agent something about yourself.</p>
+            </div>
+          } @else {
+            <div class="facts-list">
+              @for (fact of facts(); track fact.key) {
+                <div class="fact-row">
+                  <div class="fact-key">{{ fact.key }}</div>
+                  <div class="fact-value">{{ fact.value }}</div>
+                  <button
+                    mat-icon-button
+                    class="delete-btn"
+                    (click)="deleteFact(fact.key)"
+                    matTooltip="Delete this fact">
+                    <mat-icon>close</mat-icon>
+                  </button>
+                </div>
+                <mat-divider />
+              }
+              <div class="facts-footer">
+                <span>Updated by the agent using the memory skill</span>
+              </div>
+            </div>
+          }
+        </div>
+      </mat-tab>
+
+      <!-- ── HISTORY TAB ────────────────────────────────────────────── -->
+      <mat-tab>
+        <ng-template mat-tab-label>
+          <mat-icon class="tab-icon">history</mat-icon>
+          History
+          @if (conversations().length > 0) {
+            <span class="tab-badge">{{ conversations().length }}</span>
+          }
+        </ng-template>
+
+        <div class="tab-content">
+          @if (selectedConversation()) {
+            <!-- Detail view -->
+            <div class="detail-header">
+              <button mat-icon-button (click)="clearConversationView()" matTooltip="Back">
+                <mat-icon>arrow_back</mat-icon>
+              </button>
+              <span class="detail-title">{{ selectedConversation()!.title }}</span>
+            </div>
+            <div class="history-messages">
+              @for (msg of historyMessages(); track $index) {
+                <div class="history-msg" [class.user]="msg.role === 'user'"
+                     [class.assistant]="msg.role === 'assistant'">
+                  <mat-icon class="msg-icon">
+                    {{ msg.role === 'user' ? 'person' : 'smart_toy' }}
+                  </mat-icon>
+                  <div class="msg-content">{{ truncate(msg.content) }}</div>
+                </div>
+                <mat-divider />
+              }
+            </div>
+          } @else {
+            <!-- List view -->
+            @if (conversations().length === 0) {
+              <div class="empty-state">
+                <mat-icon>chat_bubble_outline</mat-icon>
+                <p>No past conversations yet.</p>
+              </div>
+            } @else {
+              <div class="conversation-list">
+                @for (conv of conversations(); track conv.id) {
+                  <div class="conv-row" (click)="viewConversation(conv)">
+                    <mat-icon class="conv-icon">chat</mat-icon>
+                    <div class="conv-info">
+                      <div class="conv-title">{{ conv.title }}</div>
+                      <div class="conv-time">{{ relativeTime(conv.updatedAt) }}</div>
+                    </div>
+                    <mat-icon class="conv-arrow">chevron_right</mat-icon>
+                  </div>
+                  <mat-divider />
+                }
+              </div>
+            }
+          }
+        </div>
+      </mat-tab>
+
+    </mat-tab-group>
+  }
+</div>

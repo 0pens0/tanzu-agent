@@ -12,9 +12,10 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDividerModule } from '@angular/material/divider';
 import { MarkdownComponent } from 'ngx-markdown';
 import { ChatService, ChatMessage, HealthInfo } from '../../services/chat.service';
-import { MemoryService, ConversationSummary, HistoryMessage } from '../../services/memory.service';
+import { MemoryService } from '../../services/memory.service';
 import { ActivityPanelComponent } from '../activity-panel/activity-panel.component';
 import { ConfigPanelComponent } from '../config-panel/config-panel.component';
+import { MemoryPanelComponent } from '../memory-panel/memory-panel.component';
 
 @Component({
   selector: 'app-chat',
@@ -31,7 +32,8 @@ import { ConfigPanelComponent } from '../config-panel/config-panel.component';
     MatDividerModule,
     MarkdownComponent,
     ActivityPanelComponent,
-    ConfigPanelComponent
+    ConfigPanelComponent,
+    MemoryPanelComponent
   ],
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.scss'
@@ -48,15 +50,12 @@ export class ChatComponent implements OnInit {
   protected isCreatingSession = signal(false);
   protected activityPanelCollapsed = signal(false);
   protected configPanelCollapsed = signal(false);
-  protected historyPanelCollapsed = signal(true);
+  protected memoryPanelCollapsed = signal(true);
   protected suggestedPrompts = signal<string[]>([]);
-  protected selectedHistorySession = signal<string | null>(null);
-  protected historyMessages = signal<HistoryMessage[]>([]);
   
-  // Expose activities, todos, and memory from services
+  // Expose activities, todos, and memory availability from services
   protected activities = computed(() => this.chatService.activities());
   protected todos = computed(() => this.chatService.todos());
-  protected conversations = computed(() => this.memoryService.conversations());
   protected memoryAvailable = computed(() => this.memoryService.memoryAvailable());
 
   private readonly SKILL_PROMPTS: Record<string, string> = {
@@ -177,8 +176,12 @@ export class ChatComponent implements OnInit {
       }
 
       // Create new session
-      const newSessionId = await this.chatService.createSession();
-      this.sessionId.set(newSessionId);
+      const sessionResult = await this.chatService.createSession();
+      this.sessionId.set(sessionResult.sessionId);
+      this.memoryService.setContextLoaded(sessionResult.memoryContextLoaded);
+      if (sessionResult.memoryContextLoaded) {
+        this.memoryService.loadFacts();
+      }
       
       // Clear messages and todos for new conversation
       this.messages.set([]);
@@ -191,7 +194,7 @@ export class ChatComponent implements OnInit {
         verticalPosition: 'bottom'
       });
       
-      console.log('Started new conversation with session:', newSessionId);
+      console.log('Started new conversation with session:', sessionResult.sessionId);
     } catch (error) {
       console.error('Failed to start new conversation:', error);
       this.snackBar.open('Failed to start conversation', 'Close', {
@@ -263,26 +266,12 @@ export class ChatComponent implements OnInit {
     this.configPanelCollapsed.update(v => !v);
   }
 
-  protected toggleHistoryPanel(): void {
-    this.historyPanelCollapsed.update(v => !v);
-    if (!this.historyPanelCollapsed()) {
+  protected toggleMemoryPanel(): void {
+    this.memoryPanelCollapsed.update(v => !v);
+    if (!this.memoryPanelCollapsed()) {
+      this.memoryService.loadFacts();
       this.memoryService.loadConversations();
     }
-  }
-
-  protected async viewHistory(conversation: ConversationSummary): Promise<void> {
-    this.selectedHistorySession.set(conversation.id);
-    const msgs = await this.memoryService.getMessages(conversation.id);
-    this.historyMessages.set(msgs);
-  }
-
-  protected clearHistoryView(): void {
-    this.selectedHistorySession.set(null);
-    this.historyMessages.set([]);
-  }
-
-  protected getRelativeTime(isoString: string): string {
-    return this.memoryService.formatRelativeTime(isoString);
   }
 
   protected sendMessage(): void {

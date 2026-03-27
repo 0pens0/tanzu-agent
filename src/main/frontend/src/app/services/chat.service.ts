@@ -162,10 +162,10 @@ export class ChatService {
    * Create a new conversation session
    */
   async createSession(
-    provider?: string, 
+    provider?: string,
     model?: string,
     timeoutMinutes?: number
-  ): Promise<string> {
+  ): Promise<{ sessionId: string; memoryContextLoaded: boolean }> {
     const body: Record<string, unknown> = {};
     if (provider) body['provider'] = provider;
     if (model) body['model'] = model;
@@ -195,8 +195,9 @@ export class ChatService {
       model
     });
 
-    console.log('Created new Goose session:', result.sessionId);
-    return result.sessionId;
+    console.log('Created new Goose session:', result.sessionId,
+      '| memory context loaded:', result.memoryContextLoaded);
+    return result;
   }
 
   /**

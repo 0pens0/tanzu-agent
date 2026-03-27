@@ -13,12 +13,20 @@ export interface HistoryMessage {
   createdAt: string;
 }
 
+export interface MemoryFact {
+  key: string;
+  value: string;
+  updatedAt: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class MemoryService {
   private readonly apiUrl = '/api/memory';
 
   readonly conversations = signal<ConversationSummary[]>([]);
+  readonly facts = signal<MemoryFact[]>([]);
   readonly memoryAvailable = signal(false);
+  readonly contextLoaded = signal(false);
 
   async loadConversations(): Promise<void> {
     try {
@@ -35,6 +43,26 @@ export class MemoryService {
     }
   }
 
+  async loadFacts(): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiUrl}/facts`);
+      if (!response.ok) return;
+      const data: MemoryFact[] = await response.json();
+      this.facts.set(data);
+    } catch {
+      // memory profile not active — ignore
+    }
+  }
+
+  async deleteFact(key: string): Promise<void> {
+    try {
+      await fetch(`${this.apiUrl}/facts/${encodeURIComponent(key)}`, { method: 'DELETE' });
+      this.facts.update(list => list.filter(f => f.key !== key));
+    } catch {
+      // ignore
+    }
+  }
+
   async getMessages(sessionId: string): Promise<HistoryMessage[]> {
     try {
       const response = await fetch(`${this.apiUrl}/conversations/${sessionId}`);
@@ -43,6 +71,10 @@ export class MemoryService {
     } catch {
       return [];
     }
+  }
+
+  setContextLoaded(loaded: boolean): void {
+    this.contextLoaded.set(loaded);
   }
 
   formatRelativeTime(isoString: string): string {
