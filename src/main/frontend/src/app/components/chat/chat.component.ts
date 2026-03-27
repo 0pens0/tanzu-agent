@@ -14,6 +14,7 @@ import { MarkdownComponent } from 'ngx-markdown';
 import { ChatService, ChatMessage, HealthInfo } from '../../services/chat.service';
 import { MemoryService } from '../../services/memory.service';
 import { SidePanelComponent } from '../side-panel/side-panel.component';
+import { ActivityPanelComponent } from '../activity-panel/activity-panel.component';
 
 @Component({
   selector: 'app-chat',
@@ -29,7 +30,8 @@ import { SidePanelComponent } from '../side-panel/side-panel.component';
     MatSnackBarModule,
     MatDividerModule,
     MarkdownComponent,
-    SidePanelComponent
+    SidePanelComponent,
+    ActivityPanelComponent
   ],
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.scss'
@@ -45,8 +47,8 @@ export class ChatComponent implements OnInit {
   protected sessionId = signal<string | null>(null);
   protected isCreatingSession = signal(false);
   protected suggestedPrompts = signal<string[]>([]);
+  protected activityPanelCollapsed = signal(false);
 
-  // Passed to SidePanelComponent
   protected activities = computed(() => this.chatService.activities());
   protected todos      = computed(() => this.chatService.todos());
 
@@ -250,6 +252,10 @@ export class ChatComponent implements OnInit {
     }
   }
 
+  protected toggleActivityPanel(): void {
+    this.activityPanelCollapsed.update(v => !v);
+  }
+
   protected sendMessage(): void {
     const prompt = this.userInput().trim();
     const currentSessionId = this.sessionId();
@@ -258,8 +264,9 @@ export class ChatComponent implements OnInit {
       return;
     }
 
-    // Clear activities for new message
+    // Clear activities and expand the activity panel for new message
     this.chatService.clearActivities();
+    this.activityPanelCollapsed.set(false);
 
     // Add user message
     const userMessage: ChatMessage = {

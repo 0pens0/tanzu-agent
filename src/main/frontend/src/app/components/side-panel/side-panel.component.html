@@ -35,18 +35,6 @@
         }
       </button>
 
-      <!-- Activity -->
-      <button class="rail-item"
-              [class.active]="activeSection() === 'activity' && detailOpen()"
-              [class.running]="runningCount() > 0"
-              (click)="selectSection('activity')"
-              matTooltip="Activity" matTooltipPosition="right">
-        <mat-icon class="rail-icon">timeline</mat-icon>
-        @if (runningCount() > 0) {
-          <span class="rail-badge pulse">{{ runningCount() }}</span>
-        }
-      </button>
-
       <!-- Memory (only when available) -->
       @if (memoryAvailable()) {
         <button class="rail-item"
@@ -170,15 +158,6 @@
             }
           </div>
         }
-      }
-
-      <!-- ── ACTIVITY ───────────────────────────────────────── -->
-      @if (activeSection() === 'activity') {
-        <app-activity-panel
-          [activities]="activities()"
-          [todos]="todos()"
-          [headerless]="true"
-        />
       }
 
       <!-- ── MEMORY ─────────────────────────────────────────── -->

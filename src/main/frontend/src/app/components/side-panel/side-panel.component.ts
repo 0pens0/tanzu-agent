@@ -4,14 +4,13 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { ChatService, ActivityEvent, TodoItem, GooseConfig, SkillInfo, McpServerInfo } from '../../services/chat.service';
+import { ChatService, GooseConfig, SkillInfo, McpServerInfo } from '../../services/chat.service';
 import { McpOAuthService } from '../../services/mcp-oauth.service';
 import { MemoryService } from '../../services/memory.service';
-import { ActivityPanelComponent } from '../activity-panel/activity-panel.component';
 import { MemoryPanelComponent } from '../memory-panel/memory-panel.component';
 import { SecurityDiagramDialogComponent } from '../security-diagram-dialog/security-diagram-dialog.component';
 
-export type NavSection = 'skills' | 'mcp' | 'activity' | 'memory';
+export type NavSection = 'skills' | 'mcp' | 'memory';
 
 @Component({
   selector: 'app-side-panel',
@@ -22,16 +21,12 @@ export type NavSection = 'skills' | 'mcp' | 'activity' | 'memory';
     MatTooltipModule,
     MatProgressSpinnerModule,
     MatDialogModule,
-    ActivityPanelComponent,
     MemoryPanelComponent
   ],
   templateUrl: './side-panel.component.html',
   styleUrl: './side-panel.component.scss'
 })
 export class SidePanelComponent implements OnInit {
-  readonly activities = input<ActivityEvent[]>([]);
-  readonly todos      = input<TodoItem[]>([]);
-
   protected activeSection = signal<NavSection>('skills');
   protected detailOpen    = signal(true);
 
@@ -46,11 +41,6 @@ export class SidePanelComponent implements OnInit {
   readonly mcpServers    = computed(() => this._config()?.mcpServers ?? []);
   readonly isBrokerMode  = computed(() => this.oauthService.isBrokerMode);
 
-  // Activity
-  readonly runningCount  = computed(() =>
-    this.activities().filter(a => a.status === 'running').length
-  );
-
   // Memory
   readonly memoryAvailable = computed(() => this.memoryService.memoryAvailable());
   readonly contextLoaded   = computed(() => this.memoryService.contextLoaded());
@@ -62,14 +52,6 @@ export class SidePanelComponent implements OnInit {
     private oauthService: McpOAuthService,
     private memoryService: MemoryService
   ) {
-    // Auto-switch to Activity when tools start running
-    effect(() => {
-      if (this.runningCount() > 0) {
-        this.activeSection.set('activity');
-        this.detailOpen.set(true);
-      }
-    });
-
     // Refresh memory data when Memory section becomes active
     effect(() => {
       if (this.activeSection() === 'memory' && this.detailOpen()) {
@@ -108,20 +90,18 @@ export class SidePanelComponent implements OnInit {
 
   protected sectionTitle(section: NavSection): string {
     const titles: Record<NavSection, string> = {
-      skills:   'Skills',
-      mcp:      'MCP Servers',
-      activity: 'Activity',
-      memory:   'Memory'
+      skills: 'Skills',
+      mcp:    'MCP Servers',
+      memory: 'Memory'
     };
     return titles[section];
   }
 
   protected sectionIcon(section: NavSection): string {
     const icons: Record<NavSection, string> = {
-      skills:   'school',
-      mcp:      'dns',
-      activity: 'timeline',
-      memory:   'psychology'
+      skills: 'school',
+      mcp:    'dns',
+      memory: 'psychology'
     };
     return icons[section];
   }
