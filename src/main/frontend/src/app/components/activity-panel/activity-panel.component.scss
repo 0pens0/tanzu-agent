@@ -12,6 +12,14 @@
     width: 48px;
     min-width: 48px;
   }
+
+  &.embedded {
+    width: 100%;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    height: 100%;
+  }
 }
 
 .panel-header {

@@ -24,7 +24,8 @@ import { MemoryService, MemoryFact, ConversationSummary, HistoryMessage } from '
   styleUrl: './memory-panel.component.scss'
 })
 export class MemoryPanelComponent {
-  readonly collapsed   = input<boolean>(false);
+  readonly collapsed      = input<boolean>(false);
+  readonly headerless     = input<boolean>(false);
   readonly collapseToggle = output<void>();
 
   protected selectedConversation = signal<ConversationSummary | null>(null);

@@ -1,9 +1,4 @@
 <div class="chat-layout">
-  <!-- Config Panel (Left) -->
-  <app-config-panel
-    [collapsed]="configPanelCollapsed()"
-    (collapseToggle)="toggleConfigPanel()"
-  />
 
   <div class="chat-container">
     <!-- Header with session controls -->
@@ -58,15 +53,6 @@
           >
             <mat-icon>stop_circle</mat-icon>
           </button>
-          @if (memoryAvailable()) {
-            <button
-              mat-icon-button
-              (click)="toggleMemoryPanel()"
-              matTooltip="Memory inspector"
-            >
-              <mat-icon>psychology</mat-icon>
-            </button>
-          }
         </div>
       </div>
     </div>
@@ -163,19 +149,9 @@
     </div>
   </div>
 
-  <!-- Activity Panel -->
-  <app-activity-panel
+  <!-- Unified Side Panel (Skills | MCP Servers | Activity | Memory) -->
+  <app-side-panel
     [activities]="activities()"
     [todos]="todos()"
-    [collapsed]="activityPanelCollapsed()"
-    (collapseToggle)="toggleActivityPanel()"
   />
-
-  <!-- Memory Inspector Panel (Right, only shown when memory is available) -->
-  @if (memoryAvailable()) {
-    <app-memory-panel
-      [collapsed]="memoryPanelCollapsed()"
-      (collapseToggle)="toggleMemoryPanel()"
-    />
-  }
 </div>

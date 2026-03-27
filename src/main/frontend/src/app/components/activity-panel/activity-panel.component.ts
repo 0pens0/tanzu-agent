@@ -25,6 +25,7 @@ export class ActivityPanelComponent {
   activities = input<ActivityEvent[]>([]);
   todos = input<TodoItem[]>([]);
   collapsed = input<boolean>(false);
+  headerless = input<boolean>(false);
   collapseToggle = output<void>();
   
   hasTodos = computed(() => this.todos().length > 0);

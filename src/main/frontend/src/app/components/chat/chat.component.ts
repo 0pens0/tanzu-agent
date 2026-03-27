@@ -13,9 +13,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MarkdownComponent } from 'ngx-markdown';
 import { ChatService, ChatMessage, HealthInfo } from '../../services/chat.service';
 import { MemoryService } from '../../services/memory.service';
-import { ActivityPanelComponent } from '../activity-panel/activity-panel.component';
-import { ConfigPanelComponent } from '../config-panel/config-panel.component';
-import { MemoryPanelComponent } from '../memory-panel/memory-panel.component';
+import { SidePanelComponent } from '../side-panel/side-panel.component';
 
 @Component({
   selector: 'app-chat',
@@ -31,9 +29,7 @@ import { MemoryPanelComponent } from '../memory-panel/memory-panel.component';
     MatSnackBarModule,
     MatDividerModule,
     MarkdownComponent,
-    ActivityPanelComponent,
-    ConfigPanelComponent,
-    MemoryPanelComponent
+    SidePanelComponent
   ],
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.scss'
@@ -48,15 +44,11 @@ export class ChatComponent implements OnInit {
   protected healthInfo = signal<HealthInfo | null>(null);
   protected sessionId = signal<string | null>(null);
   protected isCreatingSession = signal(false);
-  protected activityPanelCollapsed = signal(false);
-  protected configPanelCollapsed = signal(false);
-  protected memoryPanelCollapsed = signal(true);
   protected suggestedPrompts = signal<string[]>([]);
-  
-  // Expose activities, todos, and memory availability from services
+
+  // Passed to SidePanelComponent
   protected activities = computed(() => this.chatService.activities());
-  protected todos = computed(() => this.chatService.todos());
-  protected memoryAvailable = computed(() => this.memoryService.memoryAvailable());
+  protected todos      = computed(() => this.chatService.todos());
 
   private readonly SKILL_PROMPTS: Record<string, string> = {
     'gmail':            'Send an email via Gmail',
@@ -258,22 +250,6 @@ export class ChatComponent implements OnInit {
     }
   }
 
-  protected toggleActivityPanel(): void {
-    this.activityPanelCollapsed.update(v => !v);
-  }
-
-  protected toggleConfigPanel(): void {
-    this.configPanelCollapsed.update(v => !v);
-  }
-
-  protected toggleMemoryPanel(): void {
-    this.memoryPanelCollapsed.update(v => !v);
-    if (!this.memoryPanelCollapsed()) {
-      this.memoryService.loadFacts();
-      this.memoryService.loadConversations();
-    }
-  }
-
   protected sendMessage(): void {
     const prompt = this.userInput().trim();
     const currentSessionId = this.sessionId();
@@ -284,9 +260,6 @@ export class ChatComponent implements OnInit {
 
     // Clear activities for new message
     this.chatService.clearActivities();
-    
-    // Auto-expand activity panel when streaming starts
-    this.activityPanelCollapsed.set(false);
 
     // Add user message
     const userMessage: ChatMessage = {

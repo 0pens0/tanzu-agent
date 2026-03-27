@@ -1,4 +1,5 @@
-<div class="activity-panel" [class.collapsed]="collapsed()">
+<div class="activity-panel" [class.collapsed]="collapsed()" [class.embedded]="headerless()">
+  @if (!headerless()) {
   <div class="panel-header">
     <div class="header-content">
       <mat-icon class="header-icon">timeline</mat-icon>
@@ -15,8 +16,9 @@
       <mat-icon>{{ collapsed() ? 'chevron_left' : 'chevron_right' }}</mat-icon>
     </button>
   </div>
+  }
 
-  @if (!collapsed()) {
+  @if (!collapsed() || headerless()) {
     <div class="panel-content">
       @if (hasTodos()) {
         <app-todo-list [todos]="todos()" />

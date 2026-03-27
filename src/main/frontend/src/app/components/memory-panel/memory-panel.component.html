@@ -1,23 +1,25 @@
-<div class="memory-panel" [class.collapsed]="collapsed()">
+<div class="memory-panel" [class.collapsed]="collapsed()" [class.embedded]="headerless()">
 
-  <!-- Header / toggle -->
-  <div class="panel-header" (click)="toggle()">
-    <mat-icon class="panel-icon">psychology</mat-icon>
-    @if (!collapsed()) {
-      <span class="panel-title">Memory</span>
-      @if (contextLoaded()) {
-        <span class="context-badge" matTooltip="Prior session context was injected at startup">
-          <mat-icon class="badge-icon">bolt</mat-icon>context
-        </span>
+  <!-- Header / toggle (hidden in embedded/headerless mode) -->
+  @if (!headerless()) {
+    <div class="panel-header" (click)="toggle()">
+      <mat-icon class="panel-icon">psychology</mat-icon>
+      @if (!collapsed()) {
+        <span class="panel-title">Memory</span>
+        @if (contextLoaded()) {
+          <span class="context-badge" matTooltip="Prior session context was injected at startup">
+            <mat-icon class="badge-icon">bolt</mat-icon>context
+          </span>
+        }
       }
-    }
-    <mat-icon class="collapse-icon">
-      {{ collapsed() ? 'chevron_left' : 'chevron_right' }}
-    </mat-icon>
-  </div>
+      <mat-icon class="collapse-icon">
+        {{ collapsed() ? 'chevron_left' : 'chevron_right' }}
+      </mat-icon>
+    </div>
+  }
 
   <!-- Expanded content -->
-  @if (!collapsed()) {
+  @if (!collapsed() || headerless()) {
     <mat-tab-group class="panel-tabs" animationDuration="150ms">
 
       <!-- ── FACTS TAB ─────────────────────────────────────────────── -->
