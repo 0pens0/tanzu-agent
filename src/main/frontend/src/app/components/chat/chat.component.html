@@ -1,9 +1,7 @@
 <div class="chat-layout">
-  <!-- Config Panel (Left) -->
-  <app-config-panel
-    [collapsed]="configPanelCollapsed()"
-    (collapseToggle)="toggleConfigPanel()"
-  />
+
+  <!-- Nav Rail Side Panel — left side (Skills | MCP | Memory) -->
+  <app-side-panel />
 
   <div class="chat-container">
     <!-- Header with session controls -->
@@ -154,11 +152,12 @@
     </div>
   </div>
 
-  <!-- Activity Panel -->
+  <!-- Activity Panel — right side, collapsible -->
   <app-activity-panel
     [activities]="activities()"
     [todos]="todos()"
     [collapsed]="activityPanelCollapsed()"
     (collapseToggle)="toggleActivityPanel()"
   />
+
 </div>

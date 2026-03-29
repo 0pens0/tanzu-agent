@@ -9,7 +9,9 @@ applications:
       - java_buildpack_offline
     services:
       - agent-sso
+      - goose-memory-db
     env:
+      SPRING_PROFILES_ACTIVE: memory
       JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 21.+ } }'
       GOOSE_ENABLED: true
       # GOOSE_VERSION: 1.27.2

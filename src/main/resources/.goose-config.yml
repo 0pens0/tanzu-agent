@@ -27,6 +27,10 @@ skills:
     source: https://github.com/0pens0/tanzu-skills-marketplace.git
     branch: main
     path: skills/response-format
+  - name: memory
+    source: https://github.com/0pens0/tanzu-skills-marketplace.git
+    branch: main
+    path: skills/memory
   - name: cf-space-auditor
     source: https://github.com/0pens0/tanzu-skills-marketplace.git
     branch: main

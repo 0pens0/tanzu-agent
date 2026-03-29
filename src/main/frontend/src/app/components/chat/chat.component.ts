@@ -9,10 +9,12 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatCardModule } from '@angular/material/card';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatDividerModule } from '@angular/material/divider';
 import { MarkdownComponent } from 'ngx-markdown';
 import { ChatService, ChatMessage, HealthInfo } from '../../services/chat.service';
+import { MemoryService } from '../../services/memory.service';
+import { SidePanelComponent } from '../side-panel/side-panel.component';
 import { ActivityPanelComponent } from '../activity-panel/activity-panel.component';
-import { ConfigPanelComponent } from '../config-panel/config-panel.component';
 
 @Component({
   selector: 'app-chat',
@@ -26,9 +28,10 @@ import { ConfigPanelComponent } from '../config-panel/config-panel.component';
     MatCardModule,
     MatTooltipModule,
     MatSnackBarModule,
+    MatDividerModule,
     MarkdownComponent,
-    ActivityPanelComponent,
-    ConfigPanelComponent
+    SidePanelComponent,
+    ActivityPanelComponent
   ],
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.scss'
@@ -43,17 +46,16 @@ export class ChatComponent implements OnInit {
   protected healthInfo = signal<HealthInfo | null>(null);
   protected sessionId = signal<string | null>(null);
   protected isCreatingSession = signal(false);
-  protected activityPanelCollapsed = signal(false);
-  protected configPanelCollapsed = signal(false);
   protected suggestedPrompts = signal<string[]>([]);
-  
-  // Expose activities and todos from the service
+  protected activityPanelCollapsed = signal(false);
+
   protected activities = computed(() => this.chatService.activities());
-  protected todos = computed(() => this.chatService.todos());
+  protected todos      = computed(() => this.chatService.todos());
 
   private readonly SKILL_PROMPTS: Record<string, string> = {
     'gmail':            'Send an email via Gmail',
     'cf-space-auditor': 'Audit my Cloud Foundry spaces',
+    'memory':           'What do you remember about me?',
   };
 
   private readonly MCP_PROMPTS: Record<string, string> = {
@@ -65,6 +67,7 @@ export class ChatComponent implements OnInit {
 
   constructor(
     private chatService: ChatService,
+    private memoryService: MemoryService,
     private snackBar: MatSnackBar,
     private matIconRegistry: MatIconRegistry,
     private domSanitizer: DomSanitizer
@@ -111,6 +114,9 @@ export class ChatComponent implements OnInit {
       }
       this.suggestedPrompts.set(prompts);
     });
+
+    // Load conversation history (silently — memory profile may not be active)
+    this.memoryService.loadConversations();
   }
 
   protected useSuggestion(prompt: string): void {
@@ -164,8 +170,12 @@ export class ChatComponent implements OnInit {
       }
 
       // Create new session
-      const newSessionId = await this.chatService.createSession();
-      this.sessionId.set(newSessionId);
+      const sessionResult = await this.chatService.createSession();
+      this.sessionId.set(sessionResult.sessionId);
+      this.memoryService.setContextLoaded(sessionResult.memoryContextLoaded);
+      if (sessionResult.memoryContextLoaded) {
+        this.memoryService.loadFacts();
+      }
       
       // Clear messages and todos for new conversation
       this.messages.set([]);
@@ -178,7 +188,7 @@ export class ChatComponent implements OnInit {
         verticalPosition: 'bottom'
       });
       
-      console.log('Started new conversation with session:', newSessionId);
+      console.log('Started new conversation with session:', sessionResult.sessionId);
     } catch (error) {
       console.error('Failed to start new conversation:', error);
       this.snackBar.open('Failed to start conversation', 'Close', {
@@ -246,10 +256,6 @@ export class ChatComponent implements OnInit {
     this.activityPanelCollapsed.update(v => !v);
   }
 
-  protected toggleConfigPanel(): void {
-    this.configPanelCollapsed.update(v => !v);
-  }
-
   protected sendMessage(): void {
     const prompt = this.userInput().trim();
     const currentSessionId = this.sessionId();
@@ -258,10 +264,8 @@ export class ChatComponent implements OnInit {
       return;
     }
 
-    // Clear activities for new message
+    // Clear activities and expand the activity panel for new message
     this.chatService.clearActivities();
-    
-    // Auto-expand activity panel when streaming starts
     this.activityPanelCollapsed.set(false);
 
     // Add user message
